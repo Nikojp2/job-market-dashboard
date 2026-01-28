@@ -1,4 +1,3 @@
-import { Tooltip, ResponsiveContainer } from 'recharts';
 import { useState } from 'react';
 
 interface RegionalData {

@@ -36,7 +36,7 @@ export function MiniChart({ data, color }: MiniChartProps) {
             }
             return label;
           }}
-          formatter={(val: number) => [val.toLocaleString('fi-FI'), '']}
+          formatter={(val) => [typeof val === 'number' ? val.toLocaleString('fi-FI') : '', '']}
         />
         <Area
           type="monotone"
