@@ -5,8 +5,10 @@ import { FilterSelect } from './FilterSelect';
 import { RegionalChart } from './RegionalChart';
 import { TrendsSection } from './TrendsSection';
 import { IndustrySection } from './IndustrySection';
+import { MiniChart } from './MiniChart';
 import {
   getMonthlyLabourForceData,
+  getKeyIndicatorsWithTrend,
   getJobSeekersByRegion,
   parseJsonStat,
   GENDER_OPTIONS,
@@ -19,6 +21,20 @@ interface ChartData {
   employed: number;
   unemployed: number;
   unemploymentRate: number;
+  employmentRate: number;
+  [key: string]: string | number;
+}
+
+interface TrendData {
+  period: string;
+  employed: number;
+  employedTrend: number;
+  unemployed: number;
+  unemployedTrend: number;
+  unemploymentRate: number;
+  unemploymentRateTrend: number;
+  employmentRate: number;
+  employmentRateTrend: number;
   [key: string]: string | number;
 }
 
@@ -29,11 +45,14 @@ interface RegionalData {
 
 export function Dashboard() {
   const [chartData, setChartData] = useState<ChartData[]>([]);
+  const [trendData, setTrendData] = useState<TrendData[]>([]);
   const [regionalData, setRegionalData] = useState<RegionalData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [gender, setGender] = useState('SSS');
   const [ageGroup, setAgeGroup] = useState('15-74');
+  const [activePage, setActivePage] = useState<'avainluvut' | 'tyovoimatutkimus' | 'tyonvalitystilasto'>('avainluvut');
+  const [yearRange, setYearRange] = useState<number>(2);
 
   useEffect(() => {
     async function fetchData() {
@@ -52,6 +71,7 @@ export function Dashboard() {
             employed: 0,
             unemployed: 0,
             unemploymentRate: 0,
+            employmentRate: 0,
           };
 
           dataKeys.forEach((key, keyIndex) => {
@@ -61,13 +81,14 @@ export function Dashboard() {
             if (key === 'Tyolliset') dataPoint.employed = value;
             if (key === 'Tyottomat') dataPoint.unemployed = value;
             if (key === 'Tyottomyysaste') dataPoint.unemploymentRate = value;
+            if (key === 'Tyollisyysaste') dataPoint.employmentRate = value;
           });
 
           return dataPoint;
         });
 
-        // Take last 24 months for display
-        setChartData(transformed.slice(-24));
+        // Keep all available data (supports up to 10-year range)
+        setChartData(transformed);
         setError(null);
       } catch (err) {
         console.error('Failed to fetch data:', err);
@@ -81,6 +102,55 @@ export function Dashboard() {
 
     fetchData();
   }, [gender, ageGroup]);
+
+  // Fetch key indicators with trend data (no gender/age filters)
+  useEffect(() => {
+    async function fetchTrendData() {
+      try {
+        const response = await getKeyIndicatorsWithTrend();
+        const parsed = parseJsonStat(response);
+
+        const periods = parsed.dimensions['Kuukausi'] || [];
+        const dataKeys = parsed.dimensions['Tiedot'] || [];
+
+        const transformed: TrendData[] = periods.map((period, periodIndex) => {
+          const dataPoint: TrendData = {
+            period,
+            employed: 0,
+            employedTrend: 0,
+            unemployed: 0,
+            unemployedTrend: 0,
+            unemploymentRate: 0,
+            unemploymentRateTrend: 0,
+            employmentRate: 0,
+            employmentRateTrend: 0,
+          };
+
+          dataKeys.forEach((key, keyIndex) => {
+            const valueIndex = periodIndex * dataKeys.length + keyIndex;
+            const value = parsed.values[valueIndex] || 0;
+
+            if (key === 'Tyolliset') dataPoint.employed = value;
+            if (key === 'tyolliset_trendi') dataPoint.employedTrend = value;
+            if (key === 'Tyottomat') dataPoint.unemployed = value;
+            if (key === 'tyottomat_trendi') dataPoint.unemployedTrend = value;
+            if (key === 'Tyottomyysaste') dataPoint.unemploymentRate = value;
+            if (key === 'tyottaste_trendi') dataPoint.unemploymentRateTrend = value;
+            if (key === 'Tyollisyysaste_15_64') dataPoint.employmentRate = value;
+            if (key === 'tyollaste_15_64_trendi') dataPoint.employmentRateTrend = value;
+          });
+
+          return dataPoint;
+        });
+
+        setTrendData(transformed);
+      } catch (err) {
+        console.error('Failed to fetch trend data:', err);
+      }
+    }
+
+    fetchTrendData();
+  }, []);
 
   // Fetch regional job seeker data
   useEffect(() => {
@@ -128,6 +198,11 @@ export function Dashboard() {
   const formatNumber = (num: number): string => {
     return Math.round(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   };
+
+  const displayData = chartData.slice(-(yearRange * 12));
+  const displayTrendData = trendData.slice(-(yearRange * 12));
+  const rangeStartData = displayData[0];
+  const latestTrendData = trendData[trendData.length - 1];
 
   const calculateTrend = (current: number, previous: number): 'up' | 'down' | 'neutral' => {
     if (current > previous) return 'up';
@@ -193,145 +268,360 @@ export function Dashboard() {
         </div>
       </header>
 
+      {/* Page Navigation */}
+      <nav className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex gap-1 py-2">
+            {([
+              { key: 'avainluvut' as const, label: 'Avainluvut' },
+              { key: 'tyovoimatutkimus' as const, label: 'Työvoimatutkimus' },
+              { key: 'tyonvalitystilasto' as const, label: 'Työnvälitystilasto' },
+            ]).map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActivePage(tab.key)}
+                className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  activePage === tab.key
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </nav>
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Section: Overview */}
-        <section className="mb-12">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-            <div>
-              <h2 className="text-xl font-bold text-slate-800">Yleiskatsaus</h2>
-              <p className="text-sm text-slate-500">Työmarkkinoiden avainluvut</p>
-            </div>
-            <div className="flex flex-wrap gap-3 p-4 bg-white/50 backdrop-blur rounded-2xl border border-slate-200/50">
-              <FilterSelect
-                label="Sukupuoli"
-                value={gender}
-                options={GENDER_OPTIONS}
-                onChange={setGender}
-              />
-              <FilterSelect
-                label="Ikäryhmä"
-                value={ageGroup}
-                options={AGE_GROUP_OPTIONS}
-                onChange={setAgeGroup}
-              />
-            </div>
-          </div>
+        {/* Page: Avainluvut */}
+        {activePage === 'avainluvut' && (
+          <>
+            <section className="mb-12">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800">Yleiskatsaus</h2>
+                  <p className="text-sm text-slate-500">Työmarkkinoiden avainluvut</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-wrap gap-3 p-4 bg-white/50 backdrop-blur rounded-2xl border border-slate-200/50">
+                    <FilterSelect
+                      label="Sukupuoli"
+                      value={gender}
+                      options={GENDER_OPTIONS}
+                      onChange={setGender}
+                    />
+                    <FilterSelect
+                      label="Ikäryhmä"
+                      value={ageGroup}
+                      options={AGE_GROUP_OPTIONS}
+                      onChange={setAgeGroup}
+                    />
+                  </div>
+                  <div className="flex gap-1 p-1 bg-white/50 backdrop-blur rounded-xl border border-slate-200/50">
+                    {[1, 2, 3, 5, 10].map((y) => (
+                      <button
+                        key={y}
+                        onClick={() => setYearRange(y)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          yearRange === y
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        {y}v
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => {
+                      const rows = displayData.map((d) =>
+                        `${d.period};${d.employed};${d.employmentRate};${d.unemployed};${d.unemploymentRate}`
+                      );
+                      const csv = ['Kuukausi;Työlliset (1000);Työllisyysaste (%);Työttömät (1000);Työttömyysaste (%)', ...rows].join('\n');
+                      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'tyomarkkinat.csv';
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-white/50 backdrop-blur rounded-xl border border-slate-200/50 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-white transition-all"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    CSV
+                  </button>
+                </div>
+              </div>
 
-          {/* Key Statistics */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {latestData && yearAgoData && previousMonthData && (
-              <>
-                <StatCard
-                  title="Työlliset"
-                  value={formatNumber(latestData.employed * 1000)}
-                  subtitle={latestData.period}
-                  accentColor="#10b981"
-                  yearlyTrend={{
-                    direction: calculateTrend(latestData.employed, yearAgoData.employed),
-                    value: formatNumber(Math.abs(latestData.employed - yearAgoData.employed) * 1000),
-                    label: 'vuosi',
-                  }}
-                  monthlyTrend={{
-                    direction: calculateTrend(latestData.employed, previousMonthData.employed),
-                    value: formatNumber(Math.abs(latestData.employed - previousMonthData.employed) * 1000),
-                    label: 'kk',
-                  }}
-                />
-                <StatCard
-                  title="Työttömät"
-                  value={formatNumber(latestData.unemployed * 1000)}
-                  subtitle={latestData.period}
-                  accentColor="#ef4444"
-                  yearlyTrend={{
-                    direction: calculateTrend(yearAgoData.unemployed, latestData.unemployed),
-                    value: formatNumber(Math.abs(latestData.unemployed - yearAgoData.unemployed) * 1000),
-                    label: 'vuosi',
-                  }}
-                  monthlyTrend={{
-                    direction: calculateTrend(previousMonthData.unemployed, latestData.unemployed),
-                    value: formatNumber(Math.abs(latestData.unemployed - previousMonthData.unemployed) * 1000),
-                    label: 'kk',
-                  }}
-                />
-                <StatCard
-                  title="Työttömyysaste"
-                  value={`${latestData.unemploymentRate.toFixed(1)}%`}
-                  subtitle={latestData.period}
-                  accentColor="#8b5cf6"
-                  yearlyTrend={{
-                    direction: calculateTrend(yearAgoData.unemploymentRate, latestData.unemploymentRate),
-                    value: `${Math.abs(latestData.unemploymentRate - yearAgoData.unemploymentRate).toFixed(1)}%`,
-                    label: 'vuosi',
-                  }}
-                  monthlyTrend={{
-                    direction: calculateTrend(previousMonthData.unemploymentRate, latestData.unemploymentRate),
-                    value: `${Math.abs(latestData.unemploymentRate - previousMonthData.unemploymentRate).toFixed(1)}%`,
-                    label: 'kk',
-                  }}
-                />
-              </>
-            )}
-          </div>
-        </section>
+              {/* Data source badge */}
+              <div className="mb-4">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Lähde: Työvoimatutkimus (Tilastokeskus)
+                </span>
+              </div>
 
-        {/* Section: Charts - Työvoimatutkimus */}
-        <section className="mb-12">
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-slate-800">Työvoimatutkimus</h2>
-            <p className="text-sm text-slate-500">Kuukausittainen kehitys</p>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
-              <EmploymentChart
-                data={chartData}
-                title="Työlliset ja työttömät (tuhatta henkilöä)"
-                lines={[
-                  { dataKey: 'employed', color: '#2563eb', name: 'Työlliset' },
-                  { dataKey: 'unemployed', color: '#dc2626', name: 'Työttömät' },
-                ]}
-                yAxisLabel="Tuhansia"
-              />
-            </div>
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
-              <EmploymentChart
-                data={chartData}
-                title="Työttömyysaste (%)"
-                lines={[
-                  { dataKey: 'unemploymentRate', color: '#7c3aed', name: 'Työttömyysaste' },
-                ]}
-                yAxisLabel="%"
-              />
-            </div>
-          </div>
-        </section>
+              {/* Key Statistics Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+                {latestData && yearAgoData && previousMonthData && rangeStartData && (
+                  <>
+                    <div>
+                      <StatCard
+                        title="Työlliset"
+                        value={formatNumber(latestData.employed * 1000)}
+                        trendValue={latestTrendData ? `${formatNumber(latestTrendData.employedTrend)} tuhatta` : undefined}
+                        subtitle={latestData.period}
+                        accentColor="#10b981"
+                        monthlyTrend={{
+                          direction: calculateTrend(latestData.employed, previousMonthData.employed),
+                          positive: latestData.employed >= previousMonthData.employed,
+                          value: formatNumber(Math.abs(latestData.employed - previousMonthData.employed) * 1000),
+                          label: 'kk',
+                        }}
+                        yearlyTrend={{
+                          direction: calculateTrend(latestData.employed, yearAgoData.employed),
+                          positive: latestData.employed >= yearAgoData.employed,
+                          value: formatNumber(Math.abs(latestData.employed - yearAgoData.employed) * 1000),
+                          label: 'vuosi',
+                        }}
+                        rangeTrend={{
+                          direction: calculateTrend(latestData.employed, rangeStartData.employed),
+                          positive: latestData.employed >= rangeStartData.employed,
+                          value: formatNumber(Math.abs(latestData.employed - rangeStartData.employed) * 1000),
+                          label: `${yearRange}v`,
+                        }}
+                      />
+                      <div className="bg-white rounded-b-2xl border border-t-0 border-slate-100 px-4 pb-3 -mt-1">
+                        <MiniChart
+                          data={displayData.map((d) => ({ period: d.period, value: d.employed }))}
+                          color="#10b981"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <StatCard
+                        title="Työllisyysaste"
+                        value={`${latestData.employmentRate.toFixed(1)}%`}
+                        trendValue={latestTrendData ? `${latestTrendData.employmentRateTrend.toFixed(1)}%` : undefined}
+                        subtitle={latestData.period}
+                        accentColor="#059669"
+                        monthlyTrend={{
+                          direction: calculateTrend(latestData.employmentRate, previousMonthData.employmentRate),
+                          positive: latestData.employmentRate >= previousMonthData.employmentRate,
+                          value: `${Math.abs(latestData.employmentRate - previousMonthData.employmentRate).toFixed(1)}%`,
+                          label: 'kk',
+                        }}
+                        yearlyTrend={{
+                          direction: calculateTrend(latestData.employmentRate, yearAgoData.employmentRate),
+                          positive: latestData.employmentRate >= yearAgoData.employmentRate,
+                          value: `${Math.abs(latestData.employmentRate - yearAgoData.employmentRate).toFixed(1)}%`,
+                          label: 'vuosi',
+                        }}
+                        rangeTrend={{
+                          direction: calculateTrend(latestData.employmentRate, rangeStartData.employmentRate),
+                          positive: latestData.employmentRate >= rangeStartData.employmentRate,
+                          value: `${Math.abs(latestData.employmentRate - rangeStartData.employmentRate).toFixed(1)}%`,
+                          label: `${yearRange}v`,
+                        }}
+                      />
+                      <div className="bg-white rounded-b-2xl border border-t-0 border-slate-100 px-4 pb-3 -mt-1">
+                        <MiniChart
+                          data={displayData.map((d) => ({ period: d.period, value: d.employmentRate }))}
+                          color="#059669"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <StatCard
+                        title="Työttömät"
+                        value={formatNumber(latestData.unemployed * 1000)}
+                        trendValue={latestTrendData ? `${formatNumber(latestTrendData.unemployedTrend)} tuhatta` : undefined}
+                        subtitle={latestData.period}
+                        accentColor="#ef4444"
+                        monthlyTrend={{
+                          direction: calculateTrend(latestData.unemployed, previousMonthData.unemployed),
+                          positive: latestData.unemployed <= previousMonthData.unemployed,
+                          value: formatNumber(Math.abs(latestData.unemployed - previousMonthData.unemployed) * 1000),
+                          label: 'kk',
+                        }}
+                        yearlyTrend={{
+                          direction: calculateTrend(latestData.unemployed, yearAgoData.unemployed),
+                          positive: latestData.unemployed <= yearAgoData.unemployed,
+                          value: formatNumber(Math.abs(latestData.unemployed - yearAgoData.unemployed) * 1000),
+                          label: 'vuosi',
+                        }}
+                        rangeTrend={{
+                          direction: calculateTrend(latestData.unemployed, rangeStartData.unemployed),
+                          positive: latestData.unemployed <= rangeStartData.unemployed,
+                          value: formatNumber(Math.abs(latestData.unemployed - rangeStartData.unemployed) * 1000),
+                          label: `${yearRange}v`,
+                        }}
+                      />
+                      <div className="bg-white rounded-b-2xl border border-t-0 border-slate-100 px-4 pb-3 -mt-1">
+                        <MiniChart
+                          data={displayData.map((d) => ({ period: d.period, value: d.unemployed }))}
+                          color="#ef4444"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <StatCard
+                        title="Työttömyysaste"
+                        value={`${latestData.unemploymentRate.toFixed(1)}%`}
+                        trendValue={latestTrendData ? `${latestTrendData.unemploymentRateTrend.toFixed(1)}%` : undefined}
+                        subtitle={latestData.period}
+                        accentColor="#8b5cf6"
+                        monthlyTrend={{
+                          direction: calculateTrend(latestData.unemploymentRate, previousMonthData.unemploymentRate),
+                          positive: latestData.unemploymentRate <= previousMonthData.unemploymentRate,
+                          value: `${Math.abs(latestData.unemploymentRate - previousMonthData.unemploymentRate).toFixed(1)}%`,
+                          label: 'kk',
+                        }}
+                        yearlyTrend={{
+                          direction: calculateTrend(latestData.unemploymentRate, yearAgoData.unemploymentRate),
+                          positive: latestData.unemploymentRate <= yearAgoData.unemploymentRate,
+                          value: `${Math.abs(latestData.unemploymentRate - yearAgoData.unemploymentRate).toFixed(1)}%`,
+                          label: 'vuosi',
+                        }}
+                        rangeTrend={{
+                          direction: calculateTrend(latestData.unemploymentRate, rangeStartData.unemploymentRate),
+                          positive: latestData.unemploymentRate <= rangeStartData.unemploymentRate,
+                          value: `${Math.abs(latestData.unemploymentRate - rangeStartData.unemploymentRate).toFixed(1)}%`,
+                          label: `${yearRange}v`,
+                        }}
+                      />
+                      <div className="bg-white rounded-b-2xl border border-t-0 border-slate-100 px-4 pb-3 -mt-1">
+                        <MiniChart
+                          data={displayData.map((d) => ({ period: d.period, value: d.unemploymentRate }))}
+                          color="#8b5cf6"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
 
-        {/* Section: Regional Data - Työnvälitystilasto */}
-        <section className="mb-12">
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-slate-800">Työnvälitystilasto</h2>
-            <p className="text-sm text-slate-500">Alueellinen työttömyys</p>
-          </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
-            {regionalData.length > 0 && (
-              <RegionalChart
-                data={regionalData}
-                title="Työttömyysaste maakunnittain (%)"
-                dataKey="value"
-                unit="%"
-              />
-            )}
-          </div>
-        </section>
+              {/* Full-size charts — each metric with its trend line */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
+                  <EmploymentChart
+                    data={displayTrendData}
+                    title="Työlliset (tuhatta henkilöä)"
+                    lines={[
+                      { dataKey: 'employed', color: '#10b981', name: 'Työlliset' },
+                      { dataKey: 'employedTrend', color: '#064e3b', name: 'Trendi', dashed: true },
+                    ]}
+                    yAxisLabel="Tuhansia"
+                  />
+                </div>
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
+                  <EmploymentChart
+                    data={displayTrendData}
+                    title="Työllisyysaste (%)"
+                    lines={[
+                      { dataKey: 'employmentRate', color: '#059669', name: 'Työllisyysaste' },
+                      { dataKey: 'employmentRateTrend', color: '#064e3b', name: 'Trendi', dashed: true },
+                    ]}
+                    yAxisLabel="%"
+                  />
+                </div>
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
+                  <EmploymentChart
+                    data={displayTrendData}
+                    title="Työttömät (tuhatta henkilöä)"
+                    lines={[
+                      { dataKey: 'unemployed', color: '#ef4444', name: 'Työttömät' },
+                      { dataKey: 'unemployedTrend', color: '#881337', name: 'Trendi', dashed: true },
+                    ]}
+                    yAxisLabel="Tuhansia"
+                  />
+                </div>
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
+                  <EmploymentChart
+                    data={displayTrendData}
+                    title="Työttömyysaste (%)"
+                    lines={[
+                      { dataKey: 'unemploymentRate', color: '#8b5cf6', name: 'Työttömyysaste' },
+                      { dataKey: 'unemploymentRateTrend', color: '#4c1d95', name: 'Trendi', dashed: true },
+                    ]}
+                    yAxisLabel="%"
+                  />
+                </div>
+              </div>
+            </section>
+          </>
+        )}
 
-        {/* Section: Trends */}
-        <section className="mb-12">
-          <TrendsSection />
-        </section>
+        {/* Page: Työvoimatutkimus */}
+        {activePage === 'tyovoimatutkimus' && (
+          <>
+            <section className="mb-12">
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-slate-800">Työvoimatutkimus</h2>
+                <p className="text-sm text-slate-500">Kuukausittainen kehitys</p>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
+                  <EmploymentChart
+                    data={displayData}
+                    title="Työlliset ja työttömät (tuhatta henkilöä)"
+                    lines={[
+                      { dataKey: 'employed', color: '#2563eb', name: 'Työlliset' },
+                      { dataKey: 'unemployed', color: '#dc2626', name: 'Työttömät' },
+                    ]}
+                    yAxisLabel="Tuhansia"
+                  />
+                </div>
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
+                  <EmploymentChart
+                    data={displayData}
+                    title="Työttömyysaste (%)"
+                    lines={[
+                      { dataKey: 'unemploymentRate', color: '#7c3aed', name: 'Työttömyysaste' },
+                    ]}
+                    yAxisLabel="%"
+                  />
+                </div>
+              </div>
+            </section>
 
-        {/* Section: Industry Analysis */}
-        <section className="mb-12">
-          <IndustrySection />
-        </section>
+            <section className="mb-12">
+              <TrendsSection />
+            </section>
+          </>
+        )}
+
+        {/* Page: Työnvälitystilasto */}
+        {activePage === 'tyonvalitystilasto' && (
+          <>
+            <section className="mb-12">
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-slate-800">Työnvälitystilasto</h2>
+                <p className="text-sm text-slate-500">Alueellinen työttömyys</p>
+              </div>
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
+                {regionalData.length > 0 && (
+                  <RegionalChart
+                    data={regionalData}
+                    title="Työttömyysaste maakunnittain (%)"
+                    dataKey="value"
+                    unit="%"
+                  />
+                )}
+              </div>
+            </section>
+
+            <section className="mb-12">
+              <IndustrySection />
+            </section>
+          </>
+        )}
       </main>
 
       {/* Footer */}

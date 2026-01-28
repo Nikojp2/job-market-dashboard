@@ -1,13 +1,5 @@
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from 'recharts';
+import { Tooltip, ResponsiveContainer } from 'recharts';
+import { useState } from 'react';
 
 interface RegionalData {
   region: string;
@@ -22,86 +14,88 @@ interface RegionalChartProps {
   unit?: string;
 }
 
+function getHeatColor(value: number, min: number, max: number): string {
+  const ratio = (value - min) / (max - min || 1);
+  // Green (low) -> Yellow (mid) -> Red (high)
+  if (ratio < 0.5) {
+    const r = Math.round(34 + ratio * 2 * (234 - 34));
+    const g = Math.round(197 + ratio * 2 * (179 - 197));
+    const b = Math.round(94 + ratio * 2 * (8 - 94));
+    return `rgb(${r},${g},${b})`;
+  }
+  const r2 = Math.round(234 + (ratio - 0.5) * 2 * (239 - 234));
+  const g2 = Math.round(179 + (ratio - 0.5) * 2 * (68 - 179));
+  const b2 = Math.round(8 + (ratio - 0.5) * 2 * (68 - 8));
+  return `rgb(${r2},${g2},${b2})`;
+}
+
+function getTextColor(value: number, min: number, max: number): string {
+  const ratio = (value - min) / (max - min || 1);
+  return ratio > 0.6 ? 'white' : '#1e293b';
+}
+
 export function RegionalChart({
   data,
   title,
   unit = '',
 }: RegionalChartProps) {
-  // Sort by value descending
+  const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
   const sortedData = [...data].sort((a, b) => b.value - a.value);
-
-  // Color gradient based on value
+  const minValue = sortedData[sortedData.length - 1]?.value || 0;
   const maxValue = sortedData[0]?.value || 1;
-  const getBarColor = (value: number, index: number) => {
-    if (index < 3) return '#ef4444'; // High unemployment - red
-    if (index < 6) return '#f97316'; // Medium-high - orange
-    if (value > maxValue * 0.6) return '#eab308'; // Medium - yellow
-    return '#10b981'; // Lower - green
-  };
 
   return (
     <div>
       <h3 className="text-lg font-semibold text-slate-800 mb-6">{title}</h3>
-      <ResponsiveContainer width="100%" height={450}>
-        <BarChart
-          data={sortedData}
-          layout="vertical"
-          margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
-        >
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={true} vertical={false} />
-          <XAxis
-            type="number"
-            tick={{ fontSize: 11, fill: '#64748b' }}
-            tickLine={false}
-            axisLine={{ stroke: '#e2e8f0' }}
-          />
-          <YAxis
-            type="category"
-            dataKey="region"
-            tick={{ fontSize: 12, fill: '#475569' }}
-            tickLine={false}
-            axisLine={false}
-            width={120}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: 'white',
-              border: 'none',
-              borderRadius: '12px',
-              boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
-              padding: '12px 16px',
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+        {sortedData.map((item) => (
+          <div
+            key={item.region}
+            className="relative rounded-xl p-4 transition-all duration-200 cursor-default"
+            style={{
+              backgroundColor: getHeatColor(item.value, minValue, maxValue),
+              transform: hoveredRegion === item.region ? 'scale(1.05)' : 'scale(1)',
+              boxShadow: hoveredRegion === item.region
+                ? '0 8px 25px -5px rgb(0 0 0 / 0.2)'
+                : '0 1px 3px rgb(0 0 0 / 0.1)',
+              zIndex: hoveredRegion === item.region ? 10 : 1,
             }}
-            labelStyle={{ color: '#1e293b', fontWeight: 600, marginBottom: 4 }}
-            formatter={(value) => [`${(value as number).toFixed(1)}${unit}`, 'Työttömyysaste']}
-            cursor={{ fill: 'rgba(148, 163, 184, 0.1)' }}
-          />
-          <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={20}>
-            {sortedData.map((entry, index) => (
-              <Cell
-                key={`cell-${index}`}
-                fill={getBarColor(entry.value, index)}
-              />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-      <div className="flex items-center justify-center gap-6 mt-4 text-xs text-slate-500">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-[#ef4444]" />
-          <span>Korkea</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-[#f97316]" />
-          <span>Keskikorkea</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-[#eab308]" />
-          <span>Keskitaso</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-[#10b981]" />
-          <span>Matala</span>
-        </div>
+            onMouseEnter={() => setHoveredRegion(item.region)}
+            onMouseLeave={() => setHoveredRegion(null)}
+          >
+            <div
+              className="text-xs font-medium mb-1 truncate"
+              style={{ color: getTextColor(item.value, minValue, maxValue) }}
+            >
+              {item.region}
+            </div>
+            <div
+              className="text-xl font-bold"
+              style={{ color: getTextColor(item.value, minValue, maxValue) }}
+            >
+              {item.value.toFixed(1)}{unit}
+            </div>
+            {hoveredRegion === item.region && (
+              <div
+                className="text-xs mt-1 opacity-80"
+                style={{ color: getTextColor(item.value, minValue, maxValue) }}
+              >
+                Sija {sortedData.indexOf(item) + 1}/{sortedData.length}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {/* Color scale legend */}
+      <div className="flex items-center justify-center gap-3 mt-6 text-xs text-slate-500">
+        <span>Matala</span>
+        <div
+          className="h-3 w-48 rounded-full"
+          style={{
+            background: `linear-gradient(to right, ${getHeatColor(minValue, minValue, maxValue)}, ${getHeatColor((minValue + maxValue) / 2, minValue, maxValue)}, ${getHeatColor(maxValue, minValue, maxValue)})`,
+          }}
+        />
+        <span>Korkea</span>
       </div>
     </div>
   );

@@ -117,6 +117,7 @@ export function IndustrySection() {
             };
           })
           .filter((d) => d.unemployed > 0 || d.openPositions > 0)
+          .filter((d) => !d.occupation.startsWith('SSS'))
           .sort((a, b) => b.unemployed - a.unemployed)
           .slice(0, 15);
 
@@ -242,28 +243,27 @@ export function IndustrySection() {
           </ResponsiveContainer>
         </div>
 
-        {/* Employment by Industry Bar Chart */}
+        {/* Employment by Industry Bar Chart - Horizontal for readability */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md lg:col-span-2">
           <h3 className="text-lg font-semibold text-slate-800 mb-6">Työlliset toimialoittain (1000 henkilöä)</h3>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={Math.max(400, industryData.length * 30)}>
             <BarChart
               data={industryData}
-              margin={{ top: 5, right: 30, left: 20, bottom: 80 }}
+              layout="vertical"
+              margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-              <XAxis
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={true} vertical={false} />
+              <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
+              <YAxis
+                type="category"
                 dataKey="industry"
-                tick={{ fontSize: 10, fill: '#64748b' }}
-                angle={-45}
-                textAnchor="end"
-                height={80}
+                tick={{ fontSize: 11, fill: '#475569' }}
                 tickLine={false}
-                axisLine={{ stroke: '#e2e8f0' }}
+                axisLine={false}
+                width={180}
               />
-              <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
               <Tooltip {...tooltipStyle} />
-              <Legend iconType="circle" iconSize={8} wrapperStyle={{ paddingTop: 16 }} />
-              <Bar dataKey="employed" name="Työlliset" fill="#2563eb" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="employed" name="Työlliset" fill="#2563eb" radius={[0, 4, 4, 0]} barSize={18} />
             </BarChart>
           </ResponsiveContainer>
         </div>

@@ -16,6 +16,8 @@ export const DATASETS = {
 export const TABLES = {
   // Labour force by status, gender, age (monthly)
   LABOUR_FORCE_MONTHLY: 'statfin_tyti_pxt_135y.px',
+  // Key indicators with trends and seasonal adjustment
+  KEY_INDICATORS_TREND: 'statfin_tyti_pxt_135z.px',
   // Population by labour market status
   LABOUR_MARKET_STATUS: 'statfin_tyti_pxt_13aj.px',
   // Unemployed job seekers
@@ -147,6 +149,7 @@ export async function getMonthlyLabourForceData(
             'Tyolliset',       // Employed
             'Tyottomat',       // Unemployed
             'Tyottomyysaste',  // Unemployment rate
+            'Tyollisyysaste',  // Employment rate
           ],
         },
       },
@@ -157,6 +160,45 @@ export async function getMonthlyLabourForceData(
   };
 
   return queryTable(DATASETS.TYTI, TABLES.LABOUR_FORCE_MONTHLY, query);
+}
+
+/**
+ * Fetch key indicators with trend and seasonally adjusted series
+ * Table 135z has no gender/age filters — it provides aggregate figures
+ */
+export async function getKeyIndicatorsWithTrend(): Promise<JsonStatResponse> {
+  const query: PxWebRequest = {
+    query: [
+      {
+        code: 'Kuukausi',
+        selection: {
+          filter: 'all',
+          values: ['*'],
+        },
+      },
+      {
+        code: 'Tiedot',
+        selection: {
+          filter: 'item',
+          values: [
+            'Tyolliset',              // Employed (original)
+            'tyolliset_trendi',       // Employed (trend)
+            'Tyottomat',              // Unemployed (original)
+            'tyottomat_trendi',       // Unemployed (trend)
+            'Tyottomyysaste',         // Unemployment rate (original)
+            'tyottaste_trendi',       // Unemployment rate (trend)
+            'Tyollisyysaste_15_64',   // Employment rate 15-64 (original)
+            'tyollaste_15_64_trendi', // Employment rate 15-64 (trend)
+          ],
+        },
+      },
+    ],
+    response: {
+      format: 'json-stat2',
+    },
+  };
+
+  return queryTable(DATASETS.TYTI, TABLES.KEY_INDICATORS_TREND, query);
 }
 
 // Regional codes (Maakunnat)

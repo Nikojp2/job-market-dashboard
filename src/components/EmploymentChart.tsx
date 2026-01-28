@@ -21,6 +21,7 @@ interface EmploymentChartProps {
     dataKey: string;
     color: string;
     name: string;
+    dashed?: boolean;
   }[];
   yAxisLabel?: string;
 }
@@ -103,7 +104,8 @@ export function EmploymentChart({
               dataKey={line.dataKey}
               stroke={line.color}
               name={line.name}
-              strokeWidth={2.5}
+              strokeWidth={line.dashed ? 2 : 2.5}
+              strokeDasharray={line.dashed ? '6 3' : undefined}
               dot={false}
               activeDot={{ r: 6, strokeWidth: 2, fill: 'white' }}
             />
