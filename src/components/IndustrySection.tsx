@@ -165,11 +165,70 @@ export function IndustrySection() {
     );
   }
 
+  const exportIndustryData = () => {
+    // Export industry data
+    const industryRows = industryData.map((d) =>
+      `${d.industry};${d.employed};${d.previousYearEmployed};${d.change};${d.changePercent.toFixed(1)}`
+    );
+    const industryCsv = [
+      'Toimiala;Työlliset (1000);Edellisvuosi (1000);Muutos (1000);Muutos (%)',
+      ...industryRows
+    ].join('\n');
+
+    const blob = new Blob(['\uFEFF' + industryCsv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'toimialat.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportOccupationData = () => {
+    const occRows = occupationData.map((d) =>
+      `${d.occupation};${d.unemployed};${d.openPositions}`
+    );
+    const occCsv = [
+      'Ammattiryhmä;Työttömät;Avoimet paikat',
+      ...occRows
+    ].join('\n');
+
+    const blob = new Blob(['\uFEFF' + occCsv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ammattiryhmät.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-slate-800">Analyysi: Toimialanäkymä</h2>
-        <p className="text-sm text-slate-500">Työllisyys ja toimialajakauma</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-slate-800">Analyysi: Toimialanäkymä</h2>
+          <p className="text-sm text-slate-500">Työllisyys ja toimialajakauma</p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={exportIndustryData}
+            className="flex items-center gap-1.5 px-4 py-2 bg-white/50 backdrop-blur rounded-xl border border-slate-200/50 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-white transition-all"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Toimialat
+          </button>
+          <button
+            onClick={exportOccupationData}
+            className="flex items-center gap-1.5 px-4 py-2 bg-white/50 backdrop-blur rounded-xl border border-slate-200/50 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-white transition-all"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Ammatit
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

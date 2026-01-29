@@ -171,6 +171,40 @@ export function TrendsSection() {
     );
   }
 
+  const exportTrendData = () => {
+    if (trendData.length === 0 || selectedRegions.length === 0) return;
+
+    // Build header with region names
+    const regionLabels = selectedRegions.map(getRegionLabel);
+    const headers = ['Vuosineljännes'];
+    selectedRegions.forEach((_, i) => {
+      headers.push(`Työllisyysaste (${regionLabels[i]})`);
+      headers.push(`Työttömyysaste (${regionLabels[i]})`);
+      headers.push(`Työlliset (${regionLabels[i]})`);
+      headers.push(`Työvoima (${regionLabels[i]})`);
+    });
+
+    const rows = trendData.map((d) => {
+      const row = [d.period];
+      selectedRegions.forEach((regionCode) => {
+        row.push(String(d[`employmentRate_${regionCode}`] || ''));
+        row.push(String(d[`unemploymentRate_${regionCode}`] || ''));
+        row.push(String(d[`employed_${regionCode}`] || ''));
+        row.push(String(d[`labourForce_${regionCode}`] || ''));
+      });
+      return row.join(';');
+    });
+
+    const csv = [headers.join(';'), ...rows].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'trendit_aluevertailu.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -178,14 +212,26 @@ export function TrendsSection() {
           <h2 className="text-xl font-bold text-slate-800">Trendit: Työmarkkinamittarit</h2>
           <p className="text-sm text-slate-500">Neljännesvuosittainen kehitys - vertaile alueita</p>
         </div>
-        <div className="p-3 bg-white/50 backdrop-blur rounded-xl border border-slate-200/50">
-          <MultiRegionSelect
-            label="Alueet"
-            options={REGION_OPTIONS}
-            selected={selectedRegions}
-            onChange={setSelectedRegions}
-            maxSelections={5}
-          />
+        <div className="flex flex-wrap items-start gap-3">
+          <div className="p-3 bg-white/50 backdrop-blur rounded-xl border border-slate-200/50">
+            <MultiRegionSelect
+              label="Alueet"
+              options={REGION_OPTIONS}
+              selected={selectedRegions}
+              onChange={setSelectedRegions}
+              maxSelections={5}
+            />
+          </div>
+          <button
+            onClick={exportTrendData}
+            disabled={selectedRegions.length === 0}
+            className="flex items-center gap-1.5 px-4 py-2 bg-white/50 backdrop-blur rounded-xl border border-slate-200/50 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            CSV
+          </button>
         </div>
       </div>
 

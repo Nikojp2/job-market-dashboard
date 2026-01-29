@@ -562,9 +562,32 @@ export function Dashboard() {
         {activePage === 'tyovoimatutkimus' && (
           <>
             <section className="mb-12">
-              <div className="mb-6">
-                <h2 className="text-xl font-bold text-slate-800">Työvoimatutkimus</h2>
-                <p className="text-sm text-slate-500">Kuukausittainen kehitys</p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800">Työvoimatutkimus</h2>
+                  <p className="text-sm text-slate-500">Kuukausittainen kehitys</p>
+                </div>
+                <button
+                  onClick={() => {
+                    const rows = displayData.map((d) =>
+                      `${d.period};${d.employed};${d.employmentRate};${d.unemployed};${d.unemploymentRate}`
+                    );
+                    const csv = ['Kuukausi;Työlliset (1000);Työllisyysaste (%);Työttömät (1000);Työttömyysaste (%)', ...rows].join('\n');
+                    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'tyovoimatutkimus.csv';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-white/50 backdrop-blur rounded-xl border border-slate-200/50 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-white transition-all"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  CSV
+                </button>
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
@@ -601,9 +624,31 @@ export function Dashboard() {
         {activePage === 'tyonvalitystilasto' && (
           <>
             <section className="mb-12">
-              <div className="mb-6">
-                <h2 className="text-xl font-bold text-slate-800">Työnvälitystilasto</h2>
-                <p className="text-sm text-slate-500">Alueellinen työttömyys</p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800">Työnvälitystilasto</h2>
+                  <p className="text-sm text-slate-500">Alueellinen työttömyys</p>
+                </div>
+                <button
+                  onClick={() => {
+                    const sortedData = [...regionalData].sort((a, b) => b.value - a.value);
+                    const rows = sortedData.map((d) => `${d.region};${d.value}`);
+                    const csv = ['Maakunta;Työttömyysaste (%)', ...rows].join('\n');
+                    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'tyonvalitystilasto_alueet.csv';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-white/50 backdrop-blur rounded-xl border border-slate-200/50 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-white transition-all"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  CSV
+                </button>
               </div>
               <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
                 {regionalData.length > 0 && (
