@@ -317,6 +317,87 @@ export async function getRegionalQuarterlyData(
   return queryTable(DATASETS.TYTI, TABLES.REGIONAL_QUARTERLY, query);
 }
 
+/**
+ * Fetch quarterly regional labour market data for multiple regions
+ */
+export async function getMultiRegionQuarterlyData(
+  regions: string[]
+): Promise<JsonStatResponse> {
+  const query: PxWebRequest = {
+    query: [
+      {
+        code: 'Vuosineljännes',
+        selection: {
+          filter: 'all',
+          values: ['*'],
+        },
+      },
+      {
+        code: 'Maakunta',
+        selection: {
+          filter: 'item',
+          values: regions,
+        },
+      },
+      {
+        code: 'Tiedot',
+        selection: {
+          filter: 'item',
+          values: [
+            'Tyolliset',           // Employed
+            'Tyovoima',            // Labour force
+            'Tyottomyysaste',      // Unemployment rate
+            'Tyollisyysaste_15_64', // Employment rate
+          ],
+        },
+      },
+    ],
+    response: {
+      format: 'json-stat2',
+    },
+  };
+
+  return queryTable(DATASETS.TYTI, TABLES.REGIONAL_QUARTERLY, query);
+}
+
+/**
+ * Fetch open positions trend for multiple regions
+ */
+export async function getMultiRegionOpenPositionsTrend(
+  regions: string[]
+): Promise<JsonStatResponse> {
+  const query: PxWebRequest = {
+    query: [
+      {
+        code: 'Alue',
+        selection: {
+          filter: 'item',
+          values: regions,
+        },
+      },
+      {
+        code: 'Kuukausi',
+        selection: {
+          filter: 'all',
+          values: ['*'],
+        },
+      },
+      {
+        code: 'Tiedot',
+        selection: {
+          filter: 'item',
+          values: ['AVPAIKATLOPUSSA'],
+        },
+      },
+    ],
+    response: {
+      format: 'json-stat2',
+    },
+  };
+
+  return queryTable(DATASETS.TYONV, TABLES.OPEN_POSITIONS_REGION, query);
+}
+
 // Industry codes (main sectors)
 export const INDUSTRIES = [
   { value: 'A_B', label: 'Maa-, metsä- ja kalatalous' },
