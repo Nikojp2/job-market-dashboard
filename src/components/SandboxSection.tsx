@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   LineChart,
   Line,
@@ -11,6 +11,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import html2canvas from 'html2canvas';
 import { FilterSelect } from './FilterSelect';
 import { DataTable } from './DataTable';
 import { REGION_COLORS } from '../constants/colors';
@@ -62,6 +63,9 @@ export function SandboxSection() {
   const [tableMetadata, setTableMetadata] = useState<PxWebMetadata | null>(null);
   const [advancedTableId, setAdvancedTableId] = useState<string>('');
   const [advancedDataset, setAdvancedDataset] = useState<string>(DATASETS.TYTI);
+
+  // Ref for chart container (for image export)
+  const chartContainerRef = useRef<HTMLDivElement>(null);
 
   // Get current dataset and table config (simple mode)
   const currentDataset = SANDBOX_TABLES[datasetKey];
@@ -314,6 +318,25 @@ export function SandboxSection() {
     a.download = 'hiekkalaatikko_tulokset.csv';
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const saveAsImage = async () => {
+    if (!chartContainerRef.current || results.length === 0 || vizType === 'table') return;
+
+    try {
+      const canvas = await html2canvas(chartContainerRef.current, {
+        backgroundColor: '#ffffff',
+        scale: 2, // Higher resolution
+      });
+
+      const url = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'hiekkalaatikko_kaavio.png';
+      a.click();
+    } catch (err) {
+      console.error('Failed to save image:', err);
+    }
   };
 
   const dataKeys = useMemo(() => {
@@ -723,17 +746,6 @@ export function SandboxSection() {
               </>
             )}
           </button>
-          {results.length > 0 && (
-            <button
-              onClick={exportCsv}
-              className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-50 transition-all"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              CSV
-            </button>
-          )}
         </div>
       </div>
 
@@ -744,13 +756,41 @@ export function SandboxSection() {
 
       {hasQueried && !loading && !error && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-slate-800">Tulokset</h3>
-            <span className="text-sm text-slate-500">{results.length} riviä</span>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <div className="flex items-center gap-3">
+              <h3 className="text-lg font-semibold text-slate-800">Tulokset</h3>
+              <span className="text-sm text-slate-500">{results.length} riviä</span>
+            </div>
+            {results.length > 0 && (
+              <div className="flex gap-2">
+                <button
+                  onClick={exportCsv}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 transition-all"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  CSV
+                </button>
+                {vizType !== 'table' && (
+                  <button
+                    onClick={saveAsImage}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 transition-all"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    PNG
+                  </button>
+                )}
+              </div>
+            )}
           </div>
-          {results.length > 0 ? renderCharts() : (
-            <p className="text-slate-500 text-center py-8">Ei tuloksia valituilla suodattimilla</p>
-          )}
+          <div ref={chartContainerRef}>
+            {results.length > 0 ? renderCharts() : (
+              <p className="text-slate-500 text-center py-8">Ei tuloksia valituilla suodattimilla</p>
+            )}
+          </div>
         </div>
       )}
     </div>
