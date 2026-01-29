@@ -277,7 +277,7 @@ export function Dashboard() {
               { key: 'avainluvut' as const, label: 'Avainluvut' },
               { key: 'tyovoimatutkimus' as const, label: 'Työvoimatutkimus' },
               { key: 'tyonvalitystilasto' as const, label: 'Työnvälitystilasto' },
-              { key: 'sandbox' as const, label: 'Sandbox' },
+              { key: 'sandbox' as const, label: 'Hiekkalaatikko' },
             ]).map((tab) => (
               <button
                 key={tab.key}
