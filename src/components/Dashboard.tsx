@@ -5,6 +5,7 @@ import { FilterSelect } from './FilterSelect';
 import { RegionalChart } from './RegionalChart';
 import { TrendsSection } from './TrendsSection';
 import { IndustrySection } from './IndustrySection';
+import { SandboxSection } from './SandboxSection';
 import { MiniChart } from './MiniChart';
 import {
   getMonthlyLabourForceData,
@@ -51,7 +52,7 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [gender, setGender] = useState('SSS');
   const [ageGroup, setAgeGroup] = useState('15-74');
-  const [activePage, setActivePage] = useState<'avainluvut' | 'tyovoimatutkimus' | 'tyonvalitystilasto'>('avainluvut');
+  const [activePage, setActivePage] = useState<'avainluvut' | 'tyovoimatutkimus' | 'tyonvalitystilasto' | 'sandbox'>('avainluvut');
   const [yearRange, setYearRange] = useState<number>(2);
 
   useEffect(() => {
@@ -276,6 +277,7 @@ export function Dashboard() {
               { key: 'avainluvut' as const, label: 'Avainluvut' },
               { key: 'tyovoimatutkimus' as const, label: 'Työvoimatutkimus' },
               { key: 'tyonvalitystilasto' as const, label: 'Työnvälitystilasto' },
+              { key: 'sandbox' as const, label: 'Sandbox' },
             ]).map((tab) => (
               <button
                 key={tab.key}
@@ -666,6 +668,13 @@ export function Dashboard() {
               <IndustrySection />
             </section>
           </>
+        )}
+
+        {/* Page: Sandbox */}
+        {activePage === 'sandbox' && (
+          <section className="mb-12">
+            <SandboxSection />
+          </section>
         )}
       </main>
 

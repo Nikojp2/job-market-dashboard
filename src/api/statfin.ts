@@ -527,3 +527,146 @@ export async function getOccupationData(): Promise<JsonStatResponse> {
 
   return queryTable(DATASETS.TYONV, TABLES.OCCUPATION_DATA, query);
 }
+
+// ============================================
+// SANDBOX FEATURE - Table Configurations
+// ============================================
+
+// Metric options for each table
+export const METRIC_OPTIONS_135Y = [
+  { value: 'Tyovoima', label: 'Työvoima' },
+  { value: 'Tyolliset', label: 'Työlliset' },
+  { value: 'Tyottomat', label: 'Työttömät' },
+  { value: 'Tyottomyysaste', label: 'Työttömyysaste (%)' },
+  { value: 'Tyollisyysaste', label: 'Työllisyysaste (%)' },
+] as const;
+
+export const METRIC_OPTIONS_13LX = [
+  { value: 'Tyolliset', label: 'Työlliset' },
+  { value: 'Tyovoima', label: 'Työvoima' },
+  { value: 'Tyottomyysaste', label: 'Työttömyysaste (%)' },
+  { value: 'Tyollisyysaste_15_64', label: 'Työllisyysaste (%)' },
+] as const;
+
+export const METRIC_OPTIONS_12R5 = [
+  { value: 'TYOTTOMATLOPUSSA', label: 'Työttömät työnhakijat' },
+  { value: 'TYOTOSUUS', label: 'Työttömyysaste (%)' },
+  { value: 'AVPAIKATLOPUSSA', label: 'Avoimet työpaikat' },
+] as const;
+
+export interface SandboxDimension {
+  code: string;
+  label: string;
+  type: 'time' | 'single' | 'multi';
+  options?: readonly { value: string; label: string }[];
+}
+
+export interface SandboxTableConfig {
+  id: string;
+  label: string;
+  description: string;
+  dataset: typeof DATASETS[keyof typeof DATASETS];
+  timeDimension: string;
+  dimensions: SandboxDimension[];
+}
+
+export const SANDBOX_TABLES: Record<string, { label: string; tables: SandboxTableConfig[] }> = {
+  tyti: {
+    label: 'Työvoimatutkimus',
+    tables: [
+      {
+        id: TABLES.LABOUR_FORCE_MONTHLY,
+        label: 'Kuukausittainen työvoima',
+        description: 'Työvoima, työlliset ja työttömät kuukausittain',
+        dataset: DATASETS.TYTI,
+        timeDimension: 'Kuukausi',
+        dimensions: [
+          { code: 'Kuukausi', label: 'Aikajakso', type: 'time' },
+          { code: 'Sukupuoli', label: 'Sukupuoli', type: 'single', options: GENDER_OPTIONS },
+          { code: 'Ikäluokka', label: 'Ikäryhmä', type: 'single', options: AGE_GROUP_OPTIONS },
+          { code: 'Tiedot', label: 'Mittarit', type: 'multi', options: METRIC_OPTIONS_135Y },
+        ],
+      },
+      {
+        id: TABLES.REGIONAL_QUARTERLY,
+        label: 'Alueellinen neljännesvuositieto',
+        description: 'Työmarkkinatiedot maakunnittain neljännesvuosittain',
+        dataset: DATASETS.TYTI,
+        timeDimension: 'Vuosineljännes',
+        dimensions: [
+          { code: 'Vuosineljännes', label: 'Aikajakso', type: 'time' },
+          { code: 'Maakunta', label: 'Maakunta', type: 'multi', options: REGION_OPTIONS },
+          { code: 'Tiedot', label: 'Mittarit', type: 'multi', options: METRIC_OPTIONS_13LX },
+        ],
+      },
+    ],
+  },
+  tyonv: {
+    label: 'Työnvälitystilasto',
+    tables: [
+      {
+        id: TABLES.UNEMPLOYED_SEEKERS,
+        label: 'Työttömät työnhakijat alueittain',
+        description: 'Työttömät ja avoimet paikat maakunnittain kuukausittain',
+        dataset: DATASETS.TYONV,
+        timeDimension: 'Kuukausi',
+        dimensions: [
+          { code: 'Kuukausi', label: 'Aikajakso', type: 'time' },
+          { code: 'Alue', label: 'Alue', type: 'multi', options: REGION_OPTIONS },
+          { code: 'Tiedot', label: 'Mittarit', type: 'multi', options: METRIC_OPTIONS_12R5 },
+        ],
+      },
+    ],
+  },
+};
+
+/**
+ * Execute a dynamic sandbox query
+ */
+export async function querySandbox(
+  tableConfig: SandboxTableConfig,
+  selections: Record<string, string | string[]>,
+  yearRange: number = 2
+): Promise<JsonStatResponse> {
+  const query: PxWebRequest = {
+    query: tableConfig.dimensions.map((dim) => {
+      if (dim.type === 'time') {
+        // For time dimensions, get last N years worth of data
+        const count = dim.code === 'Vuosineljännes' ? yearRange * 4 : yearRange * 12;
+        return {
+          code: dim.code,
+          selection: {
+            filter: 'top' as const,
+            values: [String(count)],
+          },
+        };
+      }
+
+      const selected = selections[dim.code];
+      if (!selected) {
+        // Default to first option or all
+        return {
+          code: dim.code,
+          selection: {
+            filter: 'item' as const,
+            values: dim.options ? [dim.options[0].value] : ['*'],
+          },
+        };
+      }
+
+      const values = Array.isArray(selected) ? selected : [selected];
+      return {
+        code: dim.code,
+        selection: {
+          filter: 'item' as const,
+          values,
+        },
+      };
+    }),
+    response: {
+      format: 'json-stat2',
+    },
+  };
+
+  return queryTable(tableConfig.dataset, tableConfig.id, query);
+}
