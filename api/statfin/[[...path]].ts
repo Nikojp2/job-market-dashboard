@@ -3,16 +3,29 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 const STATFIN_BASE = 'https://pxdata.stat.fi/PXWeb/api/v1/fi/StatFin';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Extract the path after /api/statfin/
-  const url = new URL(req.url || '', `http://${req.headers.host}`);
-  const pathMatch = url.pathname.match(/^\/api\/statfin\/(.*)$/);
-  const path = pathMatch ? pathMatch[1] : '';
-
-  if (!path) {
-    return res.status(400).json({ error: 'Missing path parameter' });
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    return res.status(200).end();
   }
 
-  const targetUrl = `${STATFIN_BASE}/${path}`;
+  // Get path from catch-all route parameter
+  const pathSegments = req.query.path;
+  const path = Array.isArray(pathSegments) ? pathSegments.join('/') : (pathSegments || '');
+
+  // Build target URL - handle both table listing (path ending with /) and data queries
+  let targetUrl = `${STATFIN_BASE}`;
+  if (path) {
+    targetUrl += `/${path}`;
+  }
+
+  // Preserve trailing slash for directory listings (table listings)
+  const originalUrl = req.url || '';
+  if (originalUrl.endsWith('/') && !targetUrl.endsWith('/')) {
+    targetUrl += '/';
+  }
 
   try {
     const fetchOptions: RequestInit = {
@@ -33,10 +46,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Forward the response status
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('Upstream error:', response.status, errorText);
       return res.status(response.status).json({
         error: 'Upstream API error',
         status: response.status,
         message: errorText,
+        targetUrl,
       });
     }
 
@@ -54,6 +69,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({
       error: 'Failed to fetch data from Statistics Finland',
       message: error instanceof Error ? error.message : 'Unknown error',
+      targetUrl,
     });
   }
 }
