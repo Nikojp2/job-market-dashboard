@@ -11,7 +11,6 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import type { AxisDomain } from 'recharts/types/util/types';
 import { toPng } from 'html-to-image';
 import { FilterSelect } from './FilterSelect';
 import { DataTable } from './DataTable';
@@ -363,7 +362,7 @@ export function SandboxSection() {
   }, [results]);
 
   // Calculate Y-axis domain based on scale mode
-  const yAxisDomain = useMemo((): AxisDomain | undefined => {
+  const yAxisDomain = useMemo((): [number, number] | undefined => {
     if (results.length === 0 || dataKeys.length === 0) {
       return undefined;
     }
@@ -389,7 +388,7 @@ export function SandboxSection() {
     if (scaleMode === 'absolute') {
       // Zero-based: start from 0
       const niceMax = Math.ceil(max * 1.1);
-      return [0, niceMax];
+      return [0, niceMax] as [number, number];
     }
 
     // Relative mode: focus on data range
@@ -398,7 +397,7 @@ export function SandboxSection() {
     const niceMin = Math.max(0, Math.floor((min - padding) / 10) * 10);
     const niceMax = Math.ceil((max + padding) / 10) * 10;
 
-    return [niceMin, niceMax];
+    return [niceMin, niceMax] as [number, number];
   }, [results, dataKeys, scaleMode]);
 
   const formatPeriod = (value: unknown) => {
@@ -506,7 +505,7 @@ export function SandboxSection() {
                   <LineChart data={results}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                     <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} tickFormatter={formatPeriod} />
-                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} domain={yAxisDomain as AxisDomain} />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} domain={yAxisDomain} />
                     <Tooltip {...tooltipStyle} labelFormatter={formatPeriod} />
                     <Line type="monotone" dataKey={key} stroke={REGION_COLORS[idx % REGION_COLORS.length]} strokeWidth={2.5} dot={false} activeDot={{ r: 6, strokeWidth: 2, fill: 'white' }} />
                   </LineChart>
@@ -514,7 +513,7 @@ export function SandboxSection() {
                   <BarChart data={results}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                     <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} tickFormatter={formatPeriod} />
-                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} domain={yAxisDomain as AxisDomain} />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} domain={yAxisDomain} />
                     <Tooltip {...tooltipStyle} labelFormatter={formatPeriod} />
                     <Bar dataKey={key} fill={REGION_COLORS[idx % REGION_COLORS.length]} radius={[4, 4, 0, 0]} />
                   </BarChart>
@@ -532,7 +531,7 @@ export function SandboxSection() {
           <LineChart data={results}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
             <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} tickFormatter={formatPeriod} />
-            <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} domain={yAxisDomain as AxisDomain} />
+            <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} domain={yAxisDomain} />
             <Tooltip {...tooltipStyle} labelFormatter={formatPeriod} />
             <Legend iconType="circle" iconSize={8} wrapperStyle={{ paddingTop: 16 }} />
             {dataKeys.map((key, idx) => (
@@ -543,7 +542,7 @@ export function SandboxSection() {
           <BarChart data={results}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
             <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} tickFormatter={formatPeriod} />
-            <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} domain={yAxisDomain as AxisDomain} />
+            <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} domain={yAxisDomain} />
             <Tooltip {...tooltipStyle} labelFormatter={formatPeriod} />
             <Legend iconType="circle" iconSize={8} wrapperStyle={{ paddingTop: 16 }} />
             {dataKeys.map((key, idx) => (
