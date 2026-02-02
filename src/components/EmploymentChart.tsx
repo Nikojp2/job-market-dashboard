@@ -142,7 +142,7 @@ export function EmploymentChart({
             tick={{ fontSize: 11, fill: '#64748b' }}
             tickLine={false}
             axisLine={false}
-            domain={yAxisDomain}
+            {...(yAxisDomain && { domain: yAxisDomain })}
             label={
               yAxisLabel
                 ? { value: yAxisLabel, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#94a3b8' } }
