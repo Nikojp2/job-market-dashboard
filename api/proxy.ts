@@ -11,25 +11,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  // Get path from query parameter (set by rewrite)
+  // Get path from query parameter (set by rewrite) or parse from URL
+  let path = '';
+
+  // Try query parameter first
   const pathParam = req.query.path;
-  const path = Array.isArray(pathParam) ? pathParam.join('/') : (pathParam || '');
+  if (pathParam) {
+    path = Array.isArray(pathParam) ? pathParam.join('/') : pathParam;
+  }
+
+  // If path is empty, try to extract from the full URL
+  if (!path && req.url) {
+    const match = req.url.match(/[?&]path=([^&]*)/);
+    if (match) {
+      path = decodeURIComponent(match[1]);
+    }
+  }
 
   // Build target URL
   let targetUrl = STATFIN_BASE;
   if (path) {
-    targetUrl += `/${path}`;
+    // Ensure path doesn't have double slashes
+    const cleanPath = path.replace(/^\/+/, '');
+    targetUrl += `/${cleanPath}`;
   }
 
-  // Check if original request had trailing slash (for directory listings)
-  const originalUrl = req.headers['x-vercel-forwarded-for'] || req.url || '';
-  if (originalUrl.toString().includes('/api/statfin/') &&
-      (originalUrl.toString().endsWith('/') || path.endsWith('/'))) {
-    if (!targetUrl.endsWith('/')) {
-      targetUrl += '/';
-    }
-  }
-
+  console.log('Request URL:', req.url);
+  console.log('Path param:', pathParam);
+  console.log('Extracted path:', path);
   console.log('Proxying to:', targetUrl);
 
   try {
@@ -48,6 +57,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const response = await fetch(targetUrl, fetchOptions);
 
+    // Handle redirects (Statistics Finland sometimes redirects for trailing slashes)
+    if (response.status === 301 || response.status === 302) {
+      const redirectUrl = response.headers.get('location');
+      if (redirectUrl) {
+        const redirectResponse = await fetch(redirectUrl, fetchOptions);
+        const data = await redirectResponse.json();
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
+        return res.status(200).json(data);
+      }
+    }
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Upstream error:', response.status, errorText);
@@ -57,6 +78,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         status: response.status,
         message: errorText,
         targetUrl,
+        requestUrl: req.url,
+        pathParam: pathParam,
       });
     }
 
@@ -76,6 +99,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: 'Failed to fetch data from Statistics Finland',
       message: error instanceof Error ? error.message : 'Unknown error',
       targetUrl,
+      requestUrl: req.url,
     });
   }
 }

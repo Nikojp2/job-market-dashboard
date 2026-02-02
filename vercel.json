@@ -3,8 +3,8 @@
   "framework": "vite",
   "rewrites": [
     {
-      "source": "/api/statfin/:path*",
-      "destination": "/api/proxy?path=:path*"
+      "source": "/api/statfin/:path(.*)",
+      "destination": "/api/proxy?path=:path"
     },
     {
       "source": "/api/statfin",
