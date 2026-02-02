@@ -11,21 +11,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  // Get path from catch-all route parameter
-  const pathSegments = req.query.path;
-  const path = Array.isArray(pathSegments) ? pathSegments.join('/') : (pathSegments || '');
+  // Get path from query parameter (set by rewrite)
+  const pathParam = req.query.path;
+  const path = Array.isArray(pathParam) ? pathParam.join('/') : (pathParam || '');
 
-  // Build target URL - handle both table listing (path ending with /) and data queries
-  let targetUrl = `${STATFIN_BASE}`;
+  // Build target URL
+  let targetUrl = STATFIN_BASE;
   if (path) {
     targetUrl += `/${path}`;
   }
 
-  // Preserve trailing slash for directory listings (table listings)
-  const originalUrl = req.url || '';
-  if (originalUrl.endsWith('/') && !targetUrl.endsWith('/')) {
-    targetUrl += '/';
+  // Check if original request had trailing slash (for directory listings)
+  const originalUrl = req.headers['x-vercel-forwarded-for'] || req.url || '';
+  if (originalUrl.toString().includes('/api/statfin/') &&
+      (originalUrl.toString().endsWith('/') || path.endsWith('/'))) {
+    if (!targetUrl.endsWith('/')) {
+      targetUrl += '/';
+    }
   }
+
+  console.log('Proxying to:', targetUrl);
 
   try {
     const fetchOptions: RequestInit = {
@@ -43,10 +48,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const response = await fetch(targetUrl, fetchOptions);
 
-    // Forward the response status
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Upstream error:', response.status, errorText);
+      res.setHeader('Access-Control-Allow-Origin', '*');
       return res.status(response.status).json({
         error: 'Upstream API error',
         status: response.status,
@@ -57,7 +62,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const data = await response.json();
 
-    // Set CORS headers for the response
+    // Set CORS and cache headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -66,6 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(data);
   } catch (error) {
     console.error('Proxy error:', error);
+    res.setHeader('Access-Control-Allow-Origin', '*');
     return res.status(500).json({
       error: 'Failed to fetch data from Statistics Finland',
       message: error instanceof Error ? error.message : 'Unknown error',
