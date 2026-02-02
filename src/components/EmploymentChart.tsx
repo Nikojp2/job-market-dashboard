@@ -9,6 +9,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import type { AxisDomain } from 'recharts/types/util/types';
 
 interface DataPoint {
   period: string;
@@ -36,7 +37,7 @@ export function EmploymentChart({
   const [scaleMode, setScaleMode] = useState<'absolute' | 'relative'>('absolute');
 
   // Calculate the Y-axis domain based on scale mode
-  const yAxisDomain = useMemo((): [number, number] | undefined => {
+  const yAxisDomain = useMemo((): AxisDomain | undefined => {
     // Find min and max values across all lines
     let min = Infinity;
     let max = -Infinity;
@@ -142,7 +143,7 @@ export function EmploymentChart({
             tick={{ fontSize: 11, fill: '#64748b' }}
             tickLine={false}
             axisLine={false}
-            {...(yAxisDomain && { domain: yAxisDomain })}
+            domain={yAxisDomain as AxisDomain}
             label={
               yAxisLabel
                 ? { value: yAxisLabel, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#94a3b8' } }
