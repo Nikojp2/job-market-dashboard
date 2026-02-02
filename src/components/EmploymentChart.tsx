@@ -36,7 +36,7 @@ export function EmploymentChart({
   const [scaleMode, setScaleMode] = useState<'absolute' | 'relative'>('absolute');
 
   // Calculate the Y-axis domain based on scale mode
-  const yAxisDomain = useMemo(() => {
+  const yAxisDomain = useMemo((): [number, number] | undefined => {
     // Find min and max values across all lines
     let min = Infinity;
     let max = -Infinity;
@@ -52,13 +52,13 @@ export function EmploymentChart({
     });
 
     if (min === Infinity || max === -Infinity) {
-      return [0, 'auto'] as [number, 'auto'];
+      return undefined;
     }
 
     if (scaleMode === 'absolute') {
       // Zero-based: start from 0, go to max with some padding
       const niceMax = Math.ceil(max * 1.1);
-      return [0, niceMax] as [number, number];
+      return [0, niceMax];
     }
 
     // Relative mode: focus on the data range to highlight changes
@@ -69,7 +69,7 @@ export function EmploymentChart({
     const niceMin = Math.max(0, Math.floor((min - padding) / 10) * 10);
     const niceMax = Math.ceil((max + padding) / 10) * 10;
 
-    return [niceMin, niceMax] as [number, number];
+    return [niceMin, niceMax];
   }, [data, lines, scaleMode]);
 
   return (

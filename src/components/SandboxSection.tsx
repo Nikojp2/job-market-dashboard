@@ -362,9 +362,9 @@ export function SandboxSection() {
   }, [results]);
 
   // Calculate Y-axis domain based on scale mode
-  const yAxisDomain = useMemo(() => {
+  const yAxisDomain = useMemo((): [number, number] | undefined => {
     if (results.length === 0 || dataKeys.length === 0) {
-      return scaleMode === 'absolute' ? [0, 'auto'] : undefined;
+      return undefined;
     }
 
     // Find min and max values across all data keys
@@ -382,13 +382,13 @@ export function SandboxSection() {
     });
 
     if (min === Infinity || max === -Infinity) {
-      return scaleMode === 'absolute' ? [0, 'auto'] : undefined;
+      return undefined;
     }
 
     if (scaleMode === 'absolute') {
       // Zero-based: start from 0
       const niceMax = Math.ceil(max * 1.1);
-      return [0, niceMax] as [number, number];
+      return [0, niceMax];
     }
 
     // Relative mode: focus on data range
@@ -397,7 +397,7 @@ export function SandboxSection() {
     const niceMin = Math.max(0, Math.floor((min - padding) / 10) * 10);
     const niceMax = Math.ceil((max + padding) / 10) * 10;
 
-    return [niceMin, niceMax] as [number, number];
+    return [niceMin, niceMax];
   }, [results, dataKeys, scaleMode]);
 
   const formatPeriod = (value: unknown) => {
