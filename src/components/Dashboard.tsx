@@ -6,7 +6,6 @@ import { RegionalChart } from './RegionalChart';
 import { TrendsSection } from './TrendsSection';
 import { IndustrySection } from './IndustrySection';
 import { SandboxSection } from './SandboxSection';
-import { MiniChart } from './MiniChart';
 import {
   getMonthlyLabourForceData,
   getKeyIndicatorsWithTrend,
@@ -399,12 +398,6 @@ export function Dashboard() {
                           label: `${yearRange}v`,
                         }}
                       />
-                      <div className="bg-white rounded-b-2xl border border-t-0 border-slate-100 px-4 pb-3 -mt-1">
-                        <MiniChart
-                          data={displayData.map((d) => ({ period: d.period, value: d.employed }))}
-                          color="#10b981"
-                        />
-                      </div>
                     </div>
                     <div>
                       <StatCard
@@ -432,12 +425,6 @@ export function Dashboard() {
                           label: `${yearRange}v`,
                         }}
                       />
-                      <div className="bg-white rounded-b-2xl border border-t-0 border-slate-100 px-4 pb-3 -mt-1">
-                        <MiniChart
-                          data={displayData.map((d) => ({ period: d.period, value: d.employmentRate }))}
-                          color="#059669"
-                        />
-                      </div>
                     </div>
                     <div>
                       <StatCard
@@ -465,12 +452,6 @@ export function Dashboard() {
                           label: `${yearRange}v`,
                         }}
                       />
-                      <div className="bg-white rounded-b-2xl border border-t-0 border-slate-100 px-4 pb-3 -mt-1">
-                        <MiniChart
-                          data={displayData.map((d) => ({ period: d.period, value: d.unemployed }))}
-                          color="#ef4444"
-                        />
-                      </div>
                     </div>
                     <div>
                       <StatCard
@@ -498,12 +479,6 @@ export function Dashboard() {
                           label: `${yearRange}v`,
                         }}
                       />
-                      <div className="bg-white rounded-b-2xl border border-t-0 border-slate-100 px-4 pb-3 -mt-1">
-                        <MiniChart
-                          data={displayData.map((d) => ({ period: d.period, value: d.unemploymentRate }))}
-                          color="#8b5cf6"
-                        />
-                      </div>
                     </div>
                   </>
                 )}

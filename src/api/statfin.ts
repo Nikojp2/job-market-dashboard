@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { PxWebMetadata, PxWebRequest, JsonStatResponse } from '../types';
+import type { PxWebMetadata, PxWebRequest, JsonStatResponse, PxWebTableListResponse } from '../types';
 
 // Use proxy in development to avoid CORS issues
 const BASE_URL = '/api/statfin';
@@ -62,6 +62,18 @@ export async function getTableMetadata(
 ): Promise<PxWebMetadata> {
   const url = `${BASE_URL}/${dataset}/${tableId}`;
   const response = await axios.get<PxWebMetadata>(url);
+  return response.data;
+}
+
+/**
+ * Fetch list of available tables in a dataset
+ */
+export async function getDatasetTables(
+  dataset: string
+): Promise<PxWebTableListResponse> {
+  // Trailing slash is important - without it, the API may redirect
+  const url = `${BASE_URL}/${dataset}/`;
+  const response = await axios.get<PxWebTableListResponse>(url);
   return response.data;
 }
 

@@ -12,6 +12,16 @@ export interface PxWebMetadata {
   variables: PxWebVariable[];
 }
 
+// PxWeb table list response types
+export interface PxWebTableInfo {
+  id: string;
+  type: 't' | 'l'; // 't' = table, 'l' = folder/link
+  text: string;
+  updated?: string;
+}
+
+export type PxWebTableListResponse = PxWebTableInfo[];
+
 export interface PxWebQuery {
   code: string;
   selection: {

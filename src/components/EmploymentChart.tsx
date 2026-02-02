@@ -33,14 +33,10 @@ export function EmploymentChart({
   lines,
   yAxisLabel,
 }: EmploymentChartProps) {
-  const [scaleMode, setScaleMode] = useState<'auto' | 'focused'>('auto');
+  const [scaleMode, setScaleMode] = useState<'absolute' | 'relative'>('absolute');
 
-  // Calculate the data range for focused mode
+  // Calculate the Y-axis domain based on scale mode
   const yAxisDomain = useMemo(() => {
-    if (scaleMode === 'auto') {
-      return undefined; // Let Recharts auto-calculate
-    }
-
     // Find min and max values across all lines
     let min = Infinity;
     let max = -Infinity;
@@ -56,16 +52,22 @@ export function EmploymentChart({
     });
 
     if (min === Infinity || max === -Infinity) {
-      return undefined;
+      return [0, 'auto'] as [number, 'auto'];
     }
 
-    // Add 10% padding on each side to make changes more visible
+    if (scaleMode === 'absolute') {
+      // Zero-based: start from 0, go to max with some padding
+      const niceMax = Math.ceil(max * 1.1);
+      return [0, niceMax] as [number, number];
+    }
+
+    // Relative mode: focus on the data range to highlight changes
     const range = max - min;
     const padding = range * 0.15;
 
     // Round to nice numbers
-    const niceMin = Math.floor((min - padding) * 10) / 10;
-    const niceMax = Math.ceil((max + padding) * 10) / 10;
+    const niceMin = Math.max(0, Math.floor((min - padding) / 10) * 10);
+    const niceMax = Math.ceil((max + padding) / 10) * 10;
 
     return [niceMin, niceMax] as [number, number];
   }, [data, lines, scaleMode]);
@@ -74,32 +76,42 @@ export function EmploymentChart({
     <div>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
-        <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg">
-          <button
-            onClick={() => setScaleMode('auto')}
-            className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-              scaleMode === 'auto'
-                ? 'bg-white text-slate-700 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-            title="Automaattinen skaalaus (sisältää nollan)"
-          >
-            Auto
-          </button>
-          <button
-            onClick={() => setScaleMode('focused')}
-            className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-              scaleMode === 'focused'
-                ? 'bg-white text-slate-700 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-            title="Tarkennettu skaalaus (korostaa muutoksia)"
-          >
-            <svg className="w-4 h-4 inline-block mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-            </svg>
-            Zoom
-          </button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg">
+            <button
+              onClick={() => setScaleMode('absolute')}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                scaleMode === 'absolute'
+                  ? 'bg-white text-slate-700 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Absoluuttinen
+            </button>
+            <button
+              onClick={() => setScaleMode('relative')}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                scaleMode === 'relative'
+                  ? 'bg-white text-slate-700 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Suhteellinen
+            </button>
+          </div>
+          <div className="relative group">
+            <button className="p-1 text-slate-400 hover:text-slate-600 transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </button>
+            <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+              <p className="font-semibold mb-2">Skaalausvalinnat:</p>
+              <p className="mb-2"><span className="font-medium">Absoluuttinen:</span> Y-akseli alkaa nollasta. Näyttää arvojen todelliset suhteet, mutta pienet muutokset voivat olla vaikeita havaita.</p>
+              <p><span className="font-medium">Suhteellinen:</span> Y-akseli mukautuu datan vaihteluväliin. Korostaa muutoksia ja trendejä, mutta voi liioitella pieniä eroja.</p>
+              <div className="absolute -top-1 right-3 w-2 h-2 bg-slate-800 rotate-45"></div>
+            </div>
+          </div>
         </div>
       </div>
       <ResponsiveContainer width="100%" height={300}>

@@ -11,146 +11,196 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 import { FilterSelect } from './FilterSelect';
 import { DataTable } from './DataTable';
 import { REGION_COLORS } from '../constants/colors';
 import {
-  SANDBOX_TABLES,
   getTableMetadata,
+  getDatasetTables,
   queryTable,
   parseJsonStat,
   DATASETS,
-  TABLES,
-  type SandboxTableConfig,
 } from '../api/statfin';
-import type { PxWebMetadata, PxWebVariable, PxWebRequest } from '../types';
+import type { PxWebMetadata, PxWebVariable, PxWebRequest, PxWebTableInfo } from '../types';
 
 type VizType = 'line' | 'bar' | 'table';
 type ChartMode = 'combined' | 'separate';
-type QueryMode = 'simple' | 'advanced';
 
 interface SandboxResult {
   period: string;
   [key: string]: string | number;
 }
 
-// Additional tables for advanced mode
-const ADVANCED_TABLES = [
-  { dataset: DATASETS.TYTI, id: TABLES.KEY_INDICATORS_TREND, label: 'Avainluvut ja trendit (135z)' },
-  { dataset: DATASETS.TYTI, id: TABLES.INDUSTRY_EMPLOYMENT, label: 'Toimialoittainen työllisyys (13aq)' },
-  { dataset: DATASETS.TYTI, id: TABLES.INDUSTRY_QUARTERLY, label: 'Toimialat neljännesvuosittain (137l)' },
-  { dataset: DATASETS.TYONV, id: TABLES.UNEMPLOYMENT_RATE, label: 'Työttömyysaste alueittain (12tf)' },
-  { dataset: DATASETS.TYONV, id: TABLES.OPEN_POSITIONS_REGION, label: 'Avoimet paikat alueittain (12tv)' },
-  { dataset: DATASETS.TYONV, id: TABLES.OCCUPATION_DATA, label: 'Ammattiryhmittäin (12ti)' },
+type TimeUnit = 'monthly' | 'quarterly' | 'yearly' | 'unknown';
+
+interface DatasetOption {
+  value: string;
+  label: string;
+}
+
+const DATASET_OPTIONS: DatasetOption[] = [
+  { value: DATASETS.TYTI, label: 'Työvoimatutkimus' },
+  { value: DATASETS.TYONV, label: 'Työnvälitystilasto' },
 ];
 
+// Time period options based on time unit (base options, "Kaikki" is added dynamically)
+const TIME_PERIOD_OPTIONS: Record<TimeUnit, { value: number; label: string }[]> = {
+  monthly: [
+    { value: 12, label: '1v' },
+    { value: 24, label: '2v' },
+    { value: 36, label: '3v' },
+    { value: 60, label: '5v' },
+    { value: 120, label: '10v' },
+  ],
+  quarterly: [
+    { value: 4, label: '1v' },
+    { value: 8, label: '2v' },
+    { value: 12, label: '3v' },
+    { value: 20, label: '5v' },
+    { value: 40, label: '10v' },
+  ],
+  yearly: [
+    { value: 5, label: '5v' },
+    { value: 10, label: '10v' },
+    { value: 20, label: '20v' },
+  ],
+  unknown: [
+    { value: 24, label: '24 jaksoa' },
+    { value: 48, label: '48 jaksoa' },
+  ],
+};
+
+// Helper to detect time variables
+const isTimeVariable = (code: string): boolean => {
+  const timeCodes = ['Kuukausi', 'Vuosineljännes', 'Vuosi', 'Aika', 'Viikko'];
+  return timeCodes.some((t) => code.toLowerCase().includes(t.toLowerCase()));
+};
+
 export function SandboxSection() {
-  const [datasetKey, setDatasetKey] = useState<string>('tyti');
+  const [dataset, setDataset] = useState<string>(DATASETS.TYTI);
+  const [tables, setTables] = useState<PxWebTableInfo[]>([]);
+  const [tablesLoading, setTablesLoading] = useState(false);
   const [tableId, setTableId] = useState<string>('');
+  const [tableMetadata, setTableMetadata] = useState<PxWebMetadata | null>(null);
+  const [metadataLoading, setMetadataLoading] = useState(false);
   const [selections, setSelections] = useState<Record<string, string[]>>({});
-  const [yearRange, setYearRange] = useState<number>(2);
+  const [periodCount, setPeriodCount] = useState<number>(24);
   const [vizType, setVizType] = useState<VizType>('line');
   const [chartMode, setChartMode] = useState<ChartMode>('combined');
-  const [queryMode, setQueryMode] = useState<QueryMode>('simple');
+  const [scaleMode, setScaleMode] = useState<'absolute' | 'relative'>('absolute');
   const [results, setResults] = useState<SandboxResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [metadataLoading, setMetadataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasQueried, setHasQueried] = useState(false);
 
-  // Dynamic metadata for advanced mode
-  const [tableMetadata, setTableMetadata] = useState<PxWebMetadata | null>(null);
-  const [advancedTableId, setAdvancedTableId] = useState<string>('');
-  const [advancedDataset, setAdvancedDataset] = useState<string>(DATASETS.TYTI);
-
-  // Ref for chart container (for image export)
   const chartContainerRef = useRef<HTMLDivElement>(null);
 
-  // Get current dataset and table config (simple mode)
-  const currentDataset = SANDBOX_TABLES[datasetKey];
-  const currentTable = useMemo(() => {
-    return currentDataset?.tables.find((t) => t.id === tableId) || null;
-  }, [currentDataset, tableId]);
+  // Detect time unit from metadata
+  const timeVariable = useMemo(() => {
+    if (!tableMetadata) return null;
+    return tableMetadata.variables.find((v) => isTimeVariable(v.code)) || null;
+  }, [tableMetadata]);
 
-  // Initialize table and selections when dataset changes (simple mode)
+  const timeUnit = useMemo((): TimeUnit => {
+    if (!timeVariable) return 'unknown';
+    const code = timeVariable.code.toLowerCase();
+    if (code.includes('kuukausi')) return 'monthly';
+    if (code.includes('neljännes') || code.includes('quarter')) return 'quarterly';
+    if (code.includes('vuosi') && !code.includes('neljännes')) return 'yearly';
+    // Check value format
+    if (timeVariable.values.length > 0) {
+      const sample = timeVariable.values[0];
+      if (sample.includes('M')) return 'monthly';
+      if (sample.includes('Q')) return 'quarterly';
+      if (/^\d{4}$/.test(sample)) return 'yearly';
+    }
+    return 'unknown';
+  }, [timeVariable]);
+
+  const periodOptions = useMemo(() => {
+    const baseOptions = TIME_PERIOD_OPTIONS[timeUnit];
+    if (timeVariable) {
+      const maxPeriods = timeVariable.values.length;
+      // Filter to only show options that make sense for available data
+      const filtered = baseOptions.filter((o) => o.value <= maxPeriods);
+      // Add "Kaikki" option with actual total count
+      return [...filtered, { value: maxPeriods, label: 'Kaikki' }];
+    }
+    return baseOptions;
+  }, [timeUnit, timeVariable]);
+
+  // Fetch tables when dataset changes
   useEffect(() => {
-    if (queryMode === 'simple' && currentDataset?.tables.length > 0) {
-      const firstTable = currentDataset.tables[0];
-      setTableId(firstTable.id);
-      initializeSelections(firstTable);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datasetKey, queryMode]);
-
-  // Initialize selections when table changes (simple mode)
-  useEffect(() => {
-    if (queryMode === 'simple' && currentTable) {
-      initializeSelections(currentTable);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableId, queryMode]);
-
-  // Fetch metadata for advanced mode
-  useEffect(() => {
-    if (queryMode === 'advanced' && advancedTableId && advancedDataset) {
-      fetchMetadata(advancedDataset, advancedTableId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [advancedTableId, advancedDataset, queryMode]);
-
-  const fetchMetadata = async (dataset: string, tableId: string) => {
-    setMetadataLoading(true);
-    setError(null);
-    try {
-      const metadata = await getTableMetadata(dataset, tableId);
-      setTableMetadata(metadata);
-      // Initialize selections with first value of each variable
-      const newSelections: Record<string, string[]> = {};
-      metadata.variables.forEach((v) => {
-        if (isTimeVariable(v.code)) {
-          // Don't pre-select time - we'll use yearRange
-        } else if (v.values.length <= 5) {
-          // Select all if few options
-          newSelections[v.code] = v.values.slice(0, 3);
-        } else {
-          // Select first 2 for larger lists
-          newSelections[v.code] = v.values.slice(0, 2);
-        }
-      });
-      setSelections(newSelections);
-      setResults([]);
-      setHasQueried(false);
-    } catch (err) {
-      console.error('Failed to fetch metadata:', err);
-      setError('Taulukon metatietojen haku epäonnistui');
-    } finally {
-      setMetadataLoading(false);
-    }
-  };
-
-  const isTimeVariable = (code: string): boolean => {
-    const timeCodes = ['Kuukausi', 'Vuosineljännes', 'Vuosi', 'Aika'];
-    return timeCodes.some((t) => code.toLowerCase().includes(t.toLowerCase()));
-  };
-
-  const initializeSelections = (table: SandboxTableConfig) => {
-    const newSelections: Record<string, string[]> = {};
-    table.dimensions.forEach((dim) => {
-      if (dim.type === 'time') return;
-      if (dim.options) {
-        if (dim.type === 'single') {
-          newSelections[dim.code] = [dim.options[0].value];
-        } else {
-          newSelections[dim.code] = dim.options.slice(0, 2).map((o) => o.value);
-        }
+    async function fetchTables() {
+      setTablesLoading(true);
+      setError(null);
+      try {
+        const data = await getDatasetTables(dataset);
+        // Filter to only tables (type 't'), not folders
+        const tableList = data.filter((item) => item.type === 't');
+        setTables(tableList);
+        setTableId('');
+        setTableMetadata(null);
+        setResults([]);
+        setHasQueried(false);
+      } catch (err) {
+        console.error('Failed to fetch tables:', err);
+        setError('Taulukkoluettelon haku epäonnistui');
+        setTables([]);
+      } finally {
+        setTablesLoading(false);
       }
-    });
-    setSelections(newSelections);
-    setResults([]);
-    setHasQueried(false);
-    setError(null);
-  };
+    }
+    fetchTables();
+  }, [dataset]);
+
+  // Fetch metadata when table changes
+  useEffect(() => {
+    if (!tableId) {
+      setTableMetadata(null);
+      return;
+    }
+
+    async function fetchMetadata() {
+      setMetadataLoading(true);
+      setError(null);
+      try {
+        const metadata = await getTableMetadata(dataset, tableId);
+        setTableMetadata(metadata);
+
+        // Initialize selections with first value of each variable
+        const newSelections: Record<string, string[]> = {};
+        metadata.variables.forEach((v) => {
+          if (isTimeVariable(v.code)) {
+            // Don't pre-select time - we'll use periodCount
+          } else if (v.values.length <= 5) {
+            // Select first 3 if few options
+            newSelections[v.code] = v.values.slice(0, Math.min(3, v.values.length));
+          } else {
+            // Select first 2 for larger lists
+            newSelections[v.code] = v.values.slice(0, 2);
+          }
+        });
+        setSelections(newSelections);
+        setResults([]);
+        setHasQueried(false);
+      } catch (err) {
+        console.error('Failed to fetch metadata:', err);
+        setError('Taulukon metatietojen haku epäonnistui');
+        setTableMetadata(null);
+      } finally {
+        setMetadataLoading(false);
+      }
+    }
+    fetchMetadata();
+  }, [dataset, tableId]);
+
+  // Update period count when time unit changes
+  useEffect(() => {
+    const defaultPeriod = TIME_PERIOD_OPTIONS[timeUnit][1]?.value || TIME_PERIOD_OPTIONS[timeUnit][0]?.value;
+    setPeriodCount(defaultPeriod);
+  }, [timeUnit]);
 
   const handleSelectionToggle = (code: string, value: string) => {
     setSelections((prev) => {
@@ -169,75 +219,47 @@ export function SandboxSection() {
     });
   };
 
-  const handleSingleSelect = (code: string, value: string) => {
-    setSelections((prev) => ({ ...prev, [code]: [value] }));
-  };
-
   const executeQuery = useCallback(async () => {
+    if (!tableMetadata) return;
+
     setLoading(true);
     setError(null);
     setHasQueried(true);
 
     try {
-      let response;
-      let timeDimCode: string;
+      const timeVar = tableMetadata.variables.find((v) => isTimeVariable(v.code));
+      const timeDimCode = timeVar?.code || 'Kuukausi';
 
-      if (queryMode === 'simple' && currentTable) {
-        // Simple mode - use predefined config
-        timeDimCode = currentTable.timeDimension;
-        const query: PxWebRequest = {
-          query: currentTable.dimensions.map((dim) => {
-            if (dim.type === 'time') {
-              const count = dim.code === 'Vuosineljännes' ? yearRange * 4 : yearRange * 12;
-              return {
-                code: dim.code,
-                selection: { filter: 'top', values: [String(count)] },
-              };
-            }
-            const selected = selections[dim.code] || (dim.options ? [dim.options[0].value] : []);
-            return {
-              code: dim.code,
-              selection: { filter: 'item', values: selected },
-            };
-          }),
-          response: { format: 'json-stat2' },
-        };
-        response = await queryTable(currentTable.dataset, currentTable.id, query);
-      } else if (queryMode === 'advanced' && tableMetadata) {
-        // Advanced mode - use dynamic metadata
-        const timeVar = tableMetadata.variables.find((v) => isTimeVariable(v.code));
-        timeDimCode = timeVar?.code || 'Kuukausi';
-
-        const query: PxWebRequest = {
-          query: tableMetadata.variables.map((v) => {
-            if (isTimeVariable(v.code)) {
-              const isQuarterly = v.code.toLowerCase().includes('neljännes');
-              const count = isQuarterly ? yearRange * 4 : yearRange * 12;
-              return {
-                code: v.code,
-                selection: { filter: 'top', values: [String(Math.min(count, v.values.length))] },
-              };
-            }
-            const selected = selections[v.code] || v.values.slice(0, 1);
+      const query: PxWebRequest = {
+        query: tableMetadata.variables.map((v) => {
+          if (isTimeVariable(v.code)) {
+            const count = Math.min(periodCount, v.values.length);
             return {
               code: v.code,
-              selection: { filter: 'item', values: selected },
+              selection: { filter: 'top', values: [String(count)] },
             };
-          }),
-          response: { format: 'json-stat2' },
-        };
-        response = await queryTable(advancedDataset, advancedTableId, query);
-      } else {
-        throw new Error('Invalid query configuration');
-      }
+          }
+          const selected = selections[v.code] || v.values.slice(0, 1);
+          return {
+            code: v.code,
+            selection: { filter: 'item', values: selected },
+          };
+        }),
+        response: { format: 'json-stat2' },
+      };
 
+      const response = await queryTable(dataset, tableId, query);
       const parsed = parseJsonStat(response);
       const periods = parsed.dimensions[timeDimCode] || [];
       const otherDims = Object.keys(parsed.dimensions).filter((d) => d !== timeDimCode);
 
       const transformed: SandboxResult[] = [];
 
-      if (otherDims.length === 1) {
+      if (otherDims.length === 0) {
+        periods.forEach((period, pIdx) => {
+          transformed.push({ period, value: parsed.values[pIdx] ?? 0 });
+        });
+      } else if (otherDims.length === 1) {
         const dimValues = parsed.dimensions[otherDims[0]];
         periods.forEach((period, pIdx) => {
           const row: SandboxResult = { period };
@@ -263,10 +285,6 @@ export function SandboxSection() {
             });
           });
           transformed.push(row);
-        });
-      } else if (otherDims.length === 0) {
-        periods.forEach((period, pIdx) => {
-          transformed.push({ period, value: parsed.values[pIdx] ?? 0 });
         });
       } else {
         // 3+ dimensions - flatten to key combinations
@@ -303,7 +321,7 @@ export function SandboxSection() {
     } finally {
       setLoading(false);
     }
-  }, [queryMode, currentTable, tableMetadata, selections, yearRange, advancedDataset, advancedTableId]);
+  }, [tableMetadata, selections, periodCount, dataset, tableId]);
 
   const exportCsv = () => {
     if (results.length === 0) return;
@@ -324,14 +342,13 @@ export function SandboxSection() {
     if (!chartContainerRef.current || results.length === 0 || vizType === 'table') return;
 
     try {
-      const canvas = await html2canvas(chartContainerRef.current, {
+      const dataUrl = await toPng(chartContainerRef.current, {
         backgroundColor: '#ffffff',
-        scale: 2, // Higher resolution
+        pixelRatio: 2,
       });
 
-      const url = canvas.toDataURL('image/png');
       const a = document.createElement('a');
-      a.href = url;
+      a.href = dataUrl;
       a.download = 'hiekkalaatikko_kaavio.png';
       a.click();
     } catch (err) {
@@ -343,6 +360,45 @@ export function SandboxSection() {
     if (results.length === 0) return [];
     return Object.keys(results[0]).filter((k) => k !== 'period');
   }, [results]);
+
+  // Calculate Y-axis domain based on scale mode
+  const yAxisDomain = useMemo(() => {
+    if (results.length === 0 || dataKeys.length === 0) {
+      return scaleMode === 'absolute' ? [0, 'auto'] : undefined;
+    }
+
+    // Find min and max values across all data keys
+    let min = Infinity;
+    let max = -Infinity;
+
+    results.forEach((row) => {
+      dataKeys.forEach((key) => {
+        const value = row[key];
+        if (typeof value === 'number' && !isNaN(value)) {
+          min = Math.min(min, value);
+          max = Math.max(max, value);
+        }
+      });
+    });
+
+    if (min === Infinity || max === -Infinity) {
+      return scaleMode === 'absolute' ? [0, 'auto'] : undefined;
+    }
+
+    if (scaleMode === 'absolute') {
+      // Zero-based: start from 0
+      const niceMax = Math.ceil(max * 1.1);
+      return [0, niceMax] as [number, number];
+    }
+
+    // Relative mode: focus on data range
+    const range = max - min;
+    const padding = range * 0.15;
+    const niceMin = Math.max(0, Math.floor((min - padding) / 10) * 10);
+    const niceMax = Math.ceil((max + padding) / 10) * 10;
+
+    return [niceMin, niceMax] as [number, number];
+  }, [results, dataKeys, scaleMode]);
 
   const formatPeriod = (value: unknown) => {
     if (typeof value !== 'string') return String(value);
@@ -381,7 +437,7 @@ export function SandboxSection() {
         {isLargeList ? (
           <div className="max-h-32 overflow-y-auto border border-slate-200 rounded-lg p-2">
             <div className="flex flex-wrap gap-1">
-              {variable.values.slice(0, 30).map((val, idx) => {
+              {variable.values.slice(0, 50).map((val, idx) => {
                 const isSelected = selected.includes(val);
                 return (
                   <button
@@ -398,8 +454,8 @@ export function SandboxSection() {
                   </button>
                 );
               })}
-              {variable.values.length > 30 && (
-                <span className="text-xs text-slate-400 px-2">+{variable.values.length - 30} lisää</span>
+              {variable.values.length > 50 && (
+                <span className="text-xs text-slate-400 px-2">+{variable.values.length - 50} lisää</span>
               )}
             </div>
           </div>
@@ -449,7 +505,7 @@ export function SandboxSection() {
                   <LineChart data={results}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                     <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} tickFormatter={formatPeriod} />
-                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} domain={yAxisDomain} />
                     <Tooltip {...tooltipStyle} labelFormatter={formatPeriod} />
                     <Line type="monotone" dataKey={key} stroke={REGION_COLORS[idx % REGION_COLORS.length]} strokeWidth={2.5} dot={false} activeDot={{ r: 6, strokeWidth: 2, fill: 'white' }} />
                   </LineChart>
@@ -457,7 +513,7 @@ export function SandboxSection() {
                   <BarChart data={results}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                     <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} tickFormatter={formatPeriod} />
-                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} domain={yAxisDomain} />
                     <Tooltip {...tooltipStyle} labelFormatter={formatPeriod} />
                     <Bar dataKey={key} fill={REGION_COLORS[idx % REGION_COLORS.length]} radius={[4, 4, 0, 0]} />
                   </BarChart>
@@ -475,7 +531,7 @@ export function SandboxSection() {
           <LineChart data={results}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
             <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} tickFormatter={formatPeriod} />
-            <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
+            <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} domain={yAxisDomain} />
             <Tooltip {...tooltipStyle} labelFormatter={formatPeriod} />
             <Legend iconType="circle" iconSize={8} wrapperStyle={{ paddingTop: 16 }} />
             {dataKeys.map((key, idx) => (
@@ -486,7 +542,7 @@ export function SandboxSection() {
           <BarChart data={results}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
             <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} tickFormatter={formatPeriod} />
-            <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
+            <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} domain={yAxisDomain} />
             <Tooltip {...tooltipStyle} labelFormatter={formatPeriod} />
             <Legend iconType="circle" iconSize={8} wrapperStyle={{ paddingTop: 16 }} />
             {dataKeys.map((key, idx) => (
@@ -498,238 +554,190 @@ export function SandboxSection() {
     );
   };
 
+  const tableOptions = useMemo(() => {
+    return tables.map((t) => ({
+      value: t.id,
+      label: t.text,
+    }));
+  }, [tables]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-800">Hiekkalaatikko</h2>
-          <p className="text-sm text-slate-500">Räätälöi omat kyselysi Tilastokeskuksen tietokantoihin</p>
-        </div>
-        <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
-          <button
-            onClick={() => setQueryMode('simple')}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-              queryMode === 'simple' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            Perus
-          </button>
-          <button
-            onClick={() => setQueryMode('advanced')}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-              queryMode === 'advanced' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            Edistynyt
-          </button>
-        </div>
+      <div>
+        <h2 className="text-xl font-bold text-slate-800">Hiekkalaatikko</h2>
+        <p className="text-sm text-slate-500">Räätälöi omat kyselysi Tilastokeskuksen tietokantoihin</p>
       </div>
 
       {/* Controls */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-        {queryMode === 'simple' ? (
+        {/* Dataset and Table Selection */}
+        <div className="flex flex-wrap gap-4 mb-6">
+          <FilterSelect
+            label="Tietokanta"
+            value={dataset}
+            options={DATASET_OPTIONS}
+            onChange={(val) => setDataset(val)}
+          />
+          <div className="flex-1 min-w-64">
+            <label className="block text-xs font-medium text-slate-500 mb-1">Taulukko</label>
+            {tablesLoading ? (
+              <div className="flex items-center gap-2 text-slate-500 py-2">
+                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm">Ladataan taulukoita...</span>
+              </div>
+            ) : (
+              <select
+                value={tableId}
+                onChange={(e) => setTableId(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Valitse taulukko... ({tables.length} taulukkoa)</option>
+                {tableOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+
+        {/* Loading indicator for metadata */}
+        {metadataLoading && (
+          <div className="flex items-center gap-3 text-slate-500 py-4">
+            <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <span>Ladataan taulukon tietoja...</span>
+          </div>
+        )}
+
+        {/* Table metadata and filters */}
+        {tableMetadata && !metadataLoading && (
           <>
-            {/* Simple Mode */}
-            <div className="flex flex-wrap gap-4 mb-6">
-              <FilterSelect
-                label="Tietokanta"
-                value={datasetKey}
-                options={Object.entries(SANDBOX_TABLES).map(([key, val]) => ({ value: key, label: val.label }))}
-                onChange={setDatasetKey}
-              />
-              {currentDataset && (
-                <FilterSelect
-                  label="Taulukko"
-                  value={tableId}
-                  options={currentDataset.tables.map((t) => ({ value: t.id, label: t.label }))}
-                  onChange={setTableId}
-                />
-              )}
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Aikajakso</label>
-                <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
-                  {[1, 2, 3, 5].map((y) => (
+            <div className="border-t border-slate-100 pt-4 mb-6">
+              <h3 className="text-sm font-medium text-slate-700 mb-1">{tableMetadata.title}</h3>
+              <p className="text-xs text-slate-500 mb-4">
+                {tableMetadata.variables.length} muuttujaa
+                {timeVariable && ` · ${timeVariable.values.length} aikajaksoa`}
+              </p>
+
+              {/* Time period selector */}
+              <div className="mb-4">
+                <label className="block text-xs font-medium text-slate-500 mb-1">
+                  Aikajakso ({timeUnit === 'monthly' ? 'kuukaudet' : timeUnit === 'quarterly' ? 'neljännekset' : timeUnit === 'yearly' ? 'vuodet' : 'jaksot'})
+                </label>
+                <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
+                  {periodOptions.map((opt) => (
                     <button
-                      key={y}
-                      onClick={() => setYearRange(y)}
+                      key={opt.value}
+                      onClick={() => setPeriodCount(opt.value)}
                       className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                        yearRange === y ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                        periodCount === opt.value ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                       }`}
                     >
-                      {y}v
+                      {opt.label}
                     </button>
                   ))}
                 </div>
               </div>
-            </div>
 
-            {currentTable && (
-              <>
-                <p className="text-sm text-slate-500 mb-4">{currentTable.description}</p>
-                <div className="border-t border-slate-100 pt-4 mb-6">
-                  <h3 className="text-sm font-medium text-slate-700 mb-3">Suodattimet</h3>
-                  <div className="flex flex-wrap gap-4">
-                    {currentTable.dimensions
-                      .filter((d) => d.type !== 'time' && d.options)
-                      .map((dim) => (
-                        <div key={dim.code}>
-                          {dim.type === 'single' ? (
-                            <FilterSelect
-                              label={dim.label}
-                              value={selections[dim.code]?.[0] || ''}
-                              options={dim.options!}
-                              onChange={(val) => handleSingleSelect(dim.code, val)}
-                            />
-                          ) : (
-                            <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">{dim.label}</label>
-                              <div className="flex flex-wrap gap-1 max-w-md">
-                                {dim.options!.slice(0, 8).map((opt) => {
-                                  const selected = selections[dim.code]?.includes(opt.value);
-                                  return (
-                                    <button
-                                      key={opt.value}
-                                      onClick={() => handleSelectionToggle(dim.code, opt.value)}
-                                      className={`px-2 py-1 text-xs rounded-md transition-all ${
-                                        selected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                      }`}
-                                    >
-                                      {opt.label.length > 20 ? opt.label.slice(0, 20) + '...' : opt.label}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              </>
-            )}
-          </>
-        ) : (
-          <>
-            {/* Advanced Mode */}
-            <div className="flex flex-wrap gap-4 mb-6">
-              <FilterSelect
-                label="Tietokanta"
-                value={advancedDataset}
-                options={[
-                  { value: DATASETS.TYTI, label: 'Työvoimatutkimus' },
-                  { value: DATASETS.TYONV, label: 'Työnvälitystilasto' },
-                ]}
-                onChange={(val) => {
-                  setAdvancedDataset(val);
-                  setAdvancedTableId('');
-                  setTableMetadata(null);
-                }}
-              />
-              <FilterSelect
-                label="Taulukko"
-                value={advancedTableId}
-                options={[
-                  { value: '', label: 'Valitse taulukko...' },
-                  ...ADVANCED_TABLES
-                    .filter((t) => t.dataset === advancedDataset)
-                    .map((t) => ({ value: t.id, label: t.label })),
-                  // Also include simple mode tables
-                  ...(SANDBOX_TABLES[advancedDataset === DATASETS.TYTI ? 'tyti' : 'tyonv']?.tables || [])
-                    .map((t) => ({ value: t.id, label: t.label })),
-                ]}
-                onChange={setAdvancedTableId}
-              />
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Aikajakso</label>
-                <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
-                  {[1, 2, 3, 5].map((y) => (
-                    <button
-                      key={y}
-                      onClick={() => setYearRange(y)}
-                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                        yearRange === y ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                      }`}
-                    >
-                      {y}v
-                    </button>
-                  ))}
-                </div>
+              {/* Variable selectors */}
+              <h4 className="text-xs font-medium text-slate-500 mb-3">Muuttujat</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {tableMetadata.variables
+                  .filter((v) => !isTimeVariable(v.code))
+                  .map((v) => renderVariableSelector(v))}
               </div>
             </div>
-
-            {metadataLoading && (
-              <div className="flex items-center gap-3 text-slate-500 py-4">
-                <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <span>Ladataan taulukon tietoja...</span>
-              </div>
-            )}
-
-            {tableMetadata && !metadataLoading && (
-              <div className="border-t border-slate-100 pt-4 mb-6">
-                <h3 className="text-sm font-medium text-slate-700 mb-1">{tableMetadata.title}</h3>
-                <p className="text-xs text-slate-500 mb-4">
-                  {tableMetadata.variables.length} muuttujaa · Valitse arvot kullekin muuttujalle
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {tableMetadata.variables
-                    .filter((v) => !isTimeVariable(v.code))
-                    .map((v) => renderVariableSelector(v))}
-                </div>
-              </div>
-            )}
           </>
         )}
 
         {/* Visualization Type */}
-        <div className="border-t border-slate-100 pt-4 mb-6">
-          <h3 className="text-sm font-medium text-slate-700 mb-3">Visualisointi</h3>
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
-              {[
-                { key: 'line' as VizType, label: 'Viiva', icon: '📈' },
-                { key: 'bar' as VizType, label: 'Pylväs', icon: '📊' },
-                { key: 'table' as VizType, label: 'Taulukko', icon: '📋' },
-              ].map((v) => (
-                <button
-                  key={v.key}
-                  onClick={() => setVizType(v.key)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                    vizType === v.key ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  {v.icon} {v.label}
-                </button>
-              ))}
-            </div>
-            {vizType !== 'table' && dataKeys.length > 1 && (
+        {tableMetadata && (
+          <div className="border-t border-slate-100 pt-4 mb-6">
+            <h3 className="text-sm font-medium text-slate-700 mb-3">Visualisointi</h3>
+            <div className="flex flex-wrap items-center gap-4">
               <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
-                <button
-                  onClick={() => setChartMode('combined')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                    chartMode === 'combined' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  Yhdistetty
-                </button>
-                <button
-                  onClick={() => setChartMode('separate')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                    chartMode === 'separate' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  Erilliset
-                </button>
+                {[
+                  { key: 'line' as VizType, label: 'Viiva', icon: '📈' },
+                  { key: 'bar' as VizType, label: 'Pylväs', icon: '📊' },
+                  { key: 'table' as VizType, label: 'Taulukko', icon: '📋' },
+                ].map((v) => (
+                  <button
+                    key={v.key}
+                    onClick={() => setVizType(v.key)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                      vizType === v.key ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    {v.icon} {v.label}
+                  </button>
+                ))}
               </div>
-            )}
+              {vizType !== 'table' && dataKeys.length > 1 && (
+                <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
+                  <button
+                    onClick={() => setChartMode('combined')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                      chartMode === 'combined' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Yhdistetty
+                  </button>
+                  <button
+                    onClick={() => setChartMode('separate')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                      chartMode === 'separate' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Erilliset
+                  </button>
+                </div>
+              )}
+              {vizType !== 'table' && (
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
+                    <button
+                      onClick={() => setScaleMode('absolute')}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                        scaleMode === 'absolute' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Absoluuttinen
+                    </button>
+                    <button
+                      onClick={() => setScaleMode('relative')}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                        scaleMode === 'relative' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Suhteellinen
+                    </button>
+                  </div>
+                  <div className="relative group">
+                    <button className="p-1 text-slate-400 hover:text-slate-600 transition-colors">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </button>
+                    <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                      <p className="font-semibold mb-2">Skaalausvalinnat:</p>
+                      <p className="mb-2"><span className="font-medium">Absoluuttinen:</span> Y-akseli alkaa nollasta. Näyttää arvojen todelliset suhteet, mutta pienet muutokset voivat olla vaikeita havaita.</p>
+                      <p><span className="font-medium">Suhteellinen:</span> Y-akseli mukautuu datan vaihteluväliin. Korostaa muutoksia ja trendejä, mutta voi liioitella pieniä eroja.</p>
+                      <div className="absolute -top-1 right-3 w-2 h-2 bg-slate-800 rotate-45"></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Action Buttons */}
         <div className="flex gap-3">
           <button
             onClick={executeQuery}
-            disabled={loading || (queryMode === 'simple' && !currentTable) || (queryMode === 'advanced' && !tableMetadata)}
+            disabled={loading || !tableMetadata}
             className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
