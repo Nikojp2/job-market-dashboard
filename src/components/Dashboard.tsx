@@ -53,7 +53,6 @@ export function Dashboard() {
   const [ageGroup, setAgeGroup] = useState('15-74');
   const [activePage, setActivePage] = useState<'avainluvut' | 'tyovoimatutkimus' | 'tyonvalitystilasto' | 'sandbox'>('avainluvut');
   const [yearRange, setYearRange] = useState<number>(2);
-  const [chartViewMode, setChartViewMode] = useState<'combined' | 'separate'>('combined');
 
   useEffect(() => {
     async function fetchData() {
@@ -549,130 +548,52 @@ export function Dashboard() {
                   <h2 className="text-xl font-bold text-slate-800">Työvoimatutkimus</h2>
                   <p className="text-sm text-slate-500">Kuukausittainen kehitys</p>
                 </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex gap-1 p-1 bg-white/50 backdrop-blur rounded-xl border border-slate-200/50">
-                    <button
-                      onClick={() => setChartViewMode('combined')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        chartViewMode === 'combined'
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'text-slate-500 hover:text-slate-700'
-                      }`}
-                    >
-                      Yhdistetty
-                    </button>
-                    <button
-                      onClick={() => setChartViewMode('separate')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        chartViewMode === 'separate'
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'text-slate-500 hover:text-slate-700'
-                      }`}
-                    >
-                      Erilliset
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => {
-                      const rows = displayData.map((d) =>
-                        `${d.period};${d.employed};${d.employmentRate};${d.unemployed};${d.unemploymentRate}`
-                      );
-                      const csv = ['Kuukausi;Työlliset (1000);Työllisyysaste (%);Työttömät (1000);Työttömyysaste (%)', ...rows].join('\n');
-                      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = 'tyovoimatutkimus.csv';
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-white/50 backdrop-blur rounded-xl border border-slate-200/50 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-white transition-all"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    CSV
-                  </button>
+                <button
+                  onClick={() => {
+                    const rows = displayData.map((d) =>
+                      `${d.period};${d.employed};${d.employmentRate};${d.unemployed};${d.unemploymentRate}`
+                    );
+                    const csv = ['Kuukausi;Työlliset (1000);Työllisyysaste (%);Työttömät (1000);Työttömyysaste (%)', ...rows].join('\n');
+                    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'tyovoimatutkimus.csv';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-white/50 backdrop-blur rounded-xl border border-slate-200/50 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-white transition-all"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  CSV
+                </button>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
+                  <EmploymentChart
+                    data={displayData}
+                    title="Työlliset ja työttömät (tuhatta henkilöä)"
+                    lines={[
+                      { dataKey: 'employed', color: '#2563eb', name: 'Työlliset' },
+                      { dataKey: 'unemployed', color: '#dc2626', name: 'Työttömät' },
+                    ]}
+                    yAxisLabel="Tuhansia"
+                  />
+                </div>
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
+                  <EmploymentChart
+                    data={displayData}
+                    title="Työllisyysaste ja työttömyysaste (%)"
+                    lines={[
+                      { dataKey: 'employmentRate', color: '#059669', name: 'Työllisyysaste' },
+                      { dataKey: 'unemploymentRate', color: '#7c3aed', name: 'Työttömyysaste' },
+                    ]}
+                    yAxisLabel="%"
+                  />
                 </div>
               </div>
-
-              {/* Combined view - 2 charts with 2 lines each */}
-              {chartViewMode === 'combined' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
-                    <EmploymentChart
-                      data={displayData}
-                      title="Työlliset ja työttömät (tuhatta henkilöä)"
-                      lines={[
-                        { dataKey: 'employed', color: '#2563eb', name: 'Työlliset' },
-                        { dataKey: 'unemployed', color: '#dc2626', name: 'Työttömät' },
-                      ]}
-                      yAxisLabel="Tuhansia"
-                    />
-                  </div>
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
-                    <EmploymentChart
-                      data={displayData}
-                      title="Työllisyysaste ja työttömyysaste (%)"
-                      lines={[
-                        { dataKey: 'employmentRate', color: '#059669', name: 'Työllisyysaste' },
-                        { dataKey: 'unemploymentRate', color: '#7c3aed', name: 'Työttömyysaste' },
-                      ]}
-                      yAxisLabel="%"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Separate view - 4 individual charts with YoY toggles */}
-              {chartViewMode === 'separate' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
-                    <EmploymentChart
-                      data={displayData}
-                      title="Työlliset (tuhatta henkilöä)"
-                      lines={[
-                        { dataKey: 'employed', color: '#2563eb', name: 'Työlliset' },
-                      ]}
-                      yAxisLabel="Tuhansia"
-                      yoyConfig={{ dataKey: 'employed', title: 'Työlliset - vuosimuutos (%)', unit: '%', isRate: false }}
-                    />
-                  </div>
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
-                    <EmploymentChart
-                      data={displayData}
-                      title="Työttömät (tuhatta henkilöä)"
-                      lines={[
-                        { dataKey: 'unemployed', color: '#dc2626', name: 'Työttömät' },
-                      ]}
-                      yAxisLabel="Tuhansia"
-                      yoyConfig={{ dataKey: 'unemployed', title: 'Työttömät - vuosimuutos (%)', unit: '%', isRate: false }}
-                    />
-                  </div>
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
-                    <EmploymentChart
-                      data={displayData}
-                      title="Työllisyysaste (%)"
-                      lines={[
-                        { dataKey: 'employmentRate', color: '#059669', name: 'Työllisyysaste' },
-                      ]}
-                      yAxisLabel="%"
-                      yoyConfig={{ dataKey: 'employmentRate', title: 'Työllisyysaste - vuosimuutos (pp)', unit: 'pp', isRate: true }}
-                    />
-                  </div>
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
-                    <EmploymentChart
-                      data={displayData}
-                      title="Työttömyysaste (%)"
-                      lines={[
-                        { dataKey: 'unemploymentRate', color: '#7c3aed', name: 'Työttömyysaste' },
-                      ]}
-                      yAxisLabel="%"
-                      yoyConfig={{ dataKey: 'unemploymentRate', title: 'Työttömyysaste - vuosimuutos (pp)', unit: 'pp', isRate: true }}
-                    />
-                  </div>
-                </div>
-              )}
             </section>
 
             <section className="mb-12">
