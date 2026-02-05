@@ -127,16 +127,17 @@ export function EmploymentChart({
     : yAxisLabel;
 
   // Lines to display
-  const displayLines = useMemo(() => {
+  const displayLines = useMemo((): { dataKey: string; color: string; name: string; dashed?: boolean }[] => {
     if (isYoYMode) {
       if (yoyConfigs) {
         return yoyConfigs.lines.map((config) => ({
           dataKey: `yoy_${config.dataKey}`,
           color: config.color,
           name: config.name,
+          dashed: false,
         }));
       }
-      return [{ dataKey: 'yoyValue', color: lines[0]?.color || '#3b82f6', name: `Muutos ${yoyConfig?.unit}` }];
+      return [{ dataKey: 'yoyValue', color: lines[0]?.color || '#3b82f6', name: `Muutos ${yoyConfig?.unit}`, dashed: false }];
     }
     return lines;
   }, [isYoYMode, yoyConfigs, yoyConfig, lines]);
@@ -350,7 +351,8 @@ export function EmploymentChart({
               }
               return label;
             }}
-            formatter={isYoYMode ? (value: number) => {
+            formatter={isYoYMode ? (value: number | undefined) => {
+              if (value === undefined) return [''];
               const sign = value >= 0 ? '+' : '';
               const unit = yoyConfigs?.unit || yoyConfig?.unit || '';
               return [`${sign}${value.toFixed(2)} ${unit}`];
