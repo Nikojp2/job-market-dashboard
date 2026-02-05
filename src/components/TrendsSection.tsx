@@ -228,8 +228,8 @@ function TrendChart({
           <Tooltip
             {...tooltipStyle}
             labelFormatter={formatPeriod}
-            formatter={isYoYMode ? (value: number | undefined) => {
-              if (value === undefined) return [''];
+            formatter={isYoYMode ? (value: number | string | (number | string)[] | undefined) => {
+              if (value === undefined || typeof value !== 'number') return [''];
               const sign = value >= 0 ? '+' : '';
               return [`${sign}${value.toFixed(2)} ${yoyUnit}`];
             } : undefined}

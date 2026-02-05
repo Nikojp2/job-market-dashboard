@@ -127,7 +127,7 @@ export function EmploymentChart({
     : yAxisLabel;
 
   // Lines to display
-  const displayLines = useMemo((): { dataKey: string; color: string; name: string; dashed?: boolean }[] => {
+  const displayLines = useMemo(() => {
     if (isYoYMode) {
       if (yoyConfigs) {
         return yoyConfigs.lines.map((config) => ({
@@ -139,7 +139,7 @@ export function EmploymentChart({
       }
       return [{ dataKey: 'yoyValue', color: lines[0]?.color || '#3b82f6', name: `Muutos ${yoyConfig?.unit}`, dashed: false }];
     }
-    return lines;
+    return lines.map((line) => ({ ...line, dashed: line.dashed ?? false }));
   }, [isYoYMode, yoyConfigs, yoyConfig, lines]);
 
   // Helper function to calculate "nice" round numbers for axis bounds
@@ -351,8 +351,8 @@ export function EmploymentChart({
               }
               return label;
             }}
-            formatter={isYoYMode ? (value: number | undefined) => {
-              if (value === undefined) return [''];
+            formatter={isYoYMode ? (value: number | string | (number | string)[] | undefined) => {
+              if (value === undefined || typeof value !== 'number') return [''];
               const sign = value >= 0 ? '+' : '';
               const unit = yoyConfigs?.unit || yoyConfig?.unit || '';
               return [`${sign}${value.toFixed(2)} ${unit}`];
