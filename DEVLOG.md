@@ -16,6 +16,11 @@ This file tracks completed work and planned features. Share this at the start of
   - Scale toggle hidden when in YoY mode (not applicable)
   - Added to TrendsSection (quarterly data uses 4 quarters back, monthly uses 12 months)
   - Works with multi-region comparison
+- Add YoY toggle to Hiekkalaatikko (Sandbox)
+  - Dynamic periodsBack based on timeUnit (monthly=12, quarterly=4, yearly=1)
+  - YoY toggle appears after data is fetched
+  - CSV export reflects current mode (YoY or absolute)
+  - Works with all visualization types (line, bar, table)
 
 ### 2026-02-02
 - Add detailed logging and redirect handling to API proxy

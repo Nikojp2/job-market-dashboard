@@ -10,6 +10,7 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  ReferenceLine,
 } from 'recharts';
 import { toPng } from 'html-to-image';
 import { FilterSelect } from './FilterSelect';
@@ -89,6 +90,7 @@ export function SandboxSection() {
   const [vizType, setVizType] = useState<VizType>('line');
   const [chartMode, setChartMode] = useState<ChartMode>('combined');
   const [scaleMode, setScaleMode] = useState<'absolute' | 'relative'>('absolute');
+  const [showYoY, setShowYoY] = useState(false);
   const [results, setResults] = useState<SandboxResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -324,16 +326,17 @@ export function SandboxSection() {
   }, [tableMetadata, selections, periodCount, dataset, tableId]);
 
   const exportCsv = () => {
-    if (results.length === 0) return;
-    const columns = Object.keys(results[0]);
-    const header = columns.join(';');
-    const rows = results.map((row) => columns.map((col) => row[col]).join(';'));
+    if (displayResults.length === 0) return;
+    const columns = Object.keys(displayResults[0]);
+    // Add YoY suffix to column headers when in YoY mode (except period)
+    const header = columns.map(col => col === 'period' ? col : (isYoYMode ? `${col} (vuosimuutos %)` : col)).join(';');
+    const rows = displayResults.map((row) => columns.map((col) => row[col]).join(';'));
     const csv = [header, ...rows].join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'hiekkalaatikko_tulokset.csv';
+    a.download = isYoYMode ? 'hiekkalaatikko_vuosimuutos.csv' : 'hiekkalaatikko_tulokset.csv';
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -361,9 +364,75 @@ export function SandboxSection() {
     return Object.keys(results[0]).filter((k) => k !== 'period');
   }, [results]);
 
+  // Calculate periods back for YoY calculation based on time unit
+  const periodsBack = useMemo(() => {
+    switch (timeUnit) {
+      case 'monthly': return 12;
+      case 'quarterly': return 4;
+      case 'yearly': return 1;
+      default: return 12;
+    }
+  }, [timeUnit]);
+
+  // Check if we have enough data for YoY
+  const hasEnoughDataForYoY = results.length > periodsBack;
+
+  // Helper function to calculate "nice" round numbers for axis bounds
+  const getNiceNumber = (value: number, roundUp: boolean): number => {
+    if (value === 0) return 0;
+    const exponent = Math.floor(Math.log10(Math.abs(value) || 1));
+    const fraction = value / Math.pow(10, exponent);
+    let niceFraction: number;
+
+    if (roundUp) {
+      if (fraction <= 1) niceFraction = 1;
+      else if (fraction <= 2) niceFraction = 2;
+      else if (fraction <= 5) niceFraction = 5;
+      else niceFraction = 10;
+    } else {
+      if (fraction < 1.5) niceFraction = 1;
+      else if (fraction < 3) niceFraction = 2;
+      else if (fraction < 7) niceFraction = 5;
+      else niceFraction = 10;
+    }
+
+    return niceFraction * Math.pow(10, exponent);
+  };
+
+  // Calculate YoY data
+  const yoyResults = useMemo((): SandboxResult[] => {
+    if (!hasEnoughDataForYoY || dataKeys.length === 0) return [];
+
+    return results
+      .slice(periodsBack)
+      .map((current, index) => {
+        const yearAgo = results[index];
+        const row: SandboxResult = { period: current.period };
+
+        dataKeys.forEach((key) => {
+          const currentVal = current[key];
+          const yearAgoVal = yearAgo[key];
+
+          if (typeof currentVal !== 'number' || typeof yearAgoVal !== 'number') {
+            row[key] = 0;
+            return;
+          }
+
+          // Calculate percentage change
+          row[key] = yearAgoVal === 0 ? 0 : ((currentVal - yearAgoVal) / yearAgoVal) * 100;
+        });
+
+        return row;
+      });
+  }, [results, dataKeys, periodsBack, hasEnoughDataForYoY]);
+
+  // Determine which data to display
+  const isYoYMode = showYoY && hasEnoughDataForYoY;
+  const displayResults = isYoYMode ? yoyResults : results;
+
   // Calculate Y-axis domain based on scale mode
   const yAxisDomain = useMemo((): [number, number] | undefined => {
-    if (results.length === 0 || dataKeys.length === 0) {
+    if (displayResults.length === 0 || dataKeys.length === 0) {
       return undefined;
     }
 
@@ -371,7 +440,7 @@ export function SandboxSection() {
     let min = Infinity;
     let max = -Infinity;
 
-    results.forEach((row) => {
+    displayResults.forEach((row) => {
       dataKeys.forEach((key) => {
         const value = row[key];
         if (typeof value === 'number' && !isNaN(value)) {
@@ -383,6 +452,22 @@ export function SandboxSection() {
 
     if (min === Infinity || max === -Infinity) {
       return undefined;
+    }
+
+    // In YoY mode, use nice round numbers for better readability
+    if (isYoYMode) {
+      // If data crosses zero, make symmetric around zero
+      if (min < 0 && max > 0) {
+        const absMax = Math.max(Math.abs(min), Math.abs(max));
+        const niceMax = getNiceNumber(absMax * 1.1, true);
+        return [-niceMax, niceMax] as [number, number];
+      }
+      // All positive or all negative - use nice bounds
+      const range = max - min;
+      const padding = range * 0.1;
+      const niceMin = min >= 0 ? 0 : -getNiceNumber(Math.abs(min - padding), true);
+      const niceMax = max <= 0 ? 0 : getNiceNumber(max + padding, true);
+      return [niceMin, niceMax] as [number, number];
     }
 
     if (scaleMode === 'absolute') {
@@ -398,7 +483,7 @@ export function SandboxSection() {
     const niceMax = Math.ceil((max + padding) / 10) * 10;
 
     return [niceMin, niceMax] as [number, number];
-  }, [results, dataKeys, scaleMode]);
+  }, [displayResults, dataKeys, scaleMode, isYoYMode]);
 
   const formatPeriod = (value: unknown) => {
     if (typeof value !== 'string') return String(value);
@@ -483,15 +568,22 @@ export function SandboxSection() {
     );
   };
 
+  // Tooltip formatter for YoY mode
+  const yoyTooltipFormatter = (value: number | undefined) => {
+    if (value === undefined) return [''];
+    const sign = value >= 0 ? '+' : '';
+    return [`${sign}${value.toFixed(2)} %`];
+  };
+
   const renderCharts = () => {
     if (results.length === 0) return null;
 
     if (vizType === 'table') {
       const columns = [
         { key: 'period', label: 'Aikajakso' },
-        ...dataKeys.map((k) => ({ key: k, label: k })),
+        ...dataKeys.map((k) => ({ key: k, label: isYoYMode ? `${k} (vuosimuutos %)` : k })),
       ];
-      return <DataTable data={results} columns={columns} />;
+      return <DataTable data={displayResults} columns={columns} />;
     }
 
     if (chartMode === 'separate' && dataKeys.length > 1) {
@@ -499,22 +591,26 @@ export function SandboxSection() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {dataKeys.map((key, idx) => (
             <div key={key} className="bg-slate-50 rounded-xl p-4">
-              <h4 className="text-sm font-medium text-slate-700 mb-4 truncate" title={key}>{key}</h4>
+              <h4 className="text-sm font-medium text-slate-700 mb-4 truncate" title={isYoYMode ? `${key} - vuosimuutos` : key}>
+                {isYoYMode ? `${key} - vuosimuutos` : key}
+              </h4>
               <ResponsiveContainer width="100%" height={250}>
                 {vizType === 'line' ? (
-                  <LineChart data={results}>
+                  <LineChart data={displayResults}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                    {isYoYMode && <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="4 4" />}
                     <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} tickFormatter={formatPeriod} />
                     <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} domain={yAxisDomain} />
-                    <Tooltip {...tooltipStyle} labelFormatter={formatPeriod} />
+                    <Tooltip {...tooltipStyle} labelFormatter={formatPeriod} formatter={isYoYMode ? yoyTooltipFormatter : undefined} />
                     <Line type="monotone" dataKey={key} stroke={REGION_COLORS[idx % REGION_COLORS.length]} strokeWidth={2.5} dot={false} activeDot={{ r: 6, strokeWidth: 2, fill: 'white' }} />
                   </LineChart>
                 ) : (
-                  <BarChart data={results}>
+                  <BarChart data={displayResults}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                    {isYoYMode && <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="4 4" />}
                     <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} tickFormatter={formatPeriod} />
                     <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} domain={yAxisDomain} />
-                    <Tooltip {...tooltipStyle} labelFormatter={formatPeriod} />
+                    <Tooltip {...tooltipStyle} labelFormatter={formatPeriod} formatter={isYoYMode ? yoyTooltipFormatter : undefined} />
                     <Bar dataKey={key} fill={REGION_COLORS[idx % REGION_COLORS.length]} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 )}
@@ -528,25 +624,27 @@ export function SandboxSection() {
     return (
       <ResponsiveContainer width="100%" height={350}>
         {vizType === 'line' ? (
-          <LineChart data={results}>
+          <LineChart data={displayResults}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+            {isYoYMode && <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="4 4" />}
             <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} tickFormatter={formatPeriod} />
             <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} domain={yAxisDomain} />
-            <Tooltip {...tooltipStyle} labelFormatter={formatPeriod} />
+            <Tooltip {...tooltipStyle} labelFormatter={formatPeriod} formatter={isYoYMode ? yoyTooltipFormatter : undefined} />
             <Legend iconType="circle" iconSize={8} wrapperStyle={{ paddingTop: 16 }} />
             {dataKeys.map((key, idx) => (
-              <Line key={key} type="monotone" dataKey={key} name={key} stroke={REGION_COLORS[idx % REGION_COLORS.length]} strokeWidth={2.5} dot={false} activeDot={{ r: 6, strokeWidth: 2, fill: 'white' }} />
+              <Line key={key} type="monotone" dataKey={key} name={isYoYMode ? `${key} (%)` : key} stroke={REGION_COLORS[idx % REGION_COLORS.length]} strokeWidth={2.5} dot={false} activeDot={{ r: 6, strokeWidth: 2, fill: 'white' }} />
             ))}
           </LineChart>
         ) : (
-          <BarChart data={results}>
+          <BarChart data={displayResults}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+            {isYoYMode && <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="4 4" />}
             <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} tickFormatter={formatPeriod} />
             <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} domain={yAxisDomain} />
-            <Tooltip {...tooltipStyle} labelFormatter={formatPeriod} />
+            <Tooltip {...tooltipStyle} labelFormatter={formatPeriod} formatter={isYoYMode ? yoyTooltipFormatter : undefined} />
             <Legend iconType="circle" iconSize={8} wrapperStyle={{ paddingTop: 16 }} />
             {dataKeys.map((key, idx) => (
-              <Bar key={key} dataKey={key} name={key} fill={REGION_COLORS[idx % REGION_COLORS.length]} radius={[4, 4, 0, 0]} />
+              <Bar key={key} dataKey={key} name={isYoYMode ? `${key} (%)` : key} fill={REGION_COLORS[idx % REGION_COLORS.length]} radius={[4, 4, 0, 0]} />
             ))}
           </BarChart>
         )}
@@ -694,7 +792,31 @@ export function SandboxSection() {
                   </button>
                 </div>
               )}
-              {vizType !== 'table' && (
+              {/* YoY Toggle */}
+              {vizType !== 'table' && hasQueried && results.length > 0 && (
+                <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
+                  <button
+                    onClick={() => setShowYoY(false)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                      !showYoY ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Arvo
+                  </button>
+                  <button
+                    onClick={() => setShowYoY(true)}
+                    disabled={!hasEnoughDataForYoY}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                      showYoY && hasEnoughDataForYoY ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                    } ${!hasEnoughDataForYoY ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={!hasEnoughDataForYoY ? `Vähintään ${periodsBack + 1} jaksoa dataa vaaditaan` : undefined}
+                  >
+                    Vuosimuutos
+                  </button>
+                </div>
+              )}
+              {/* Scale Toggle - only show when not in YoY mode */}
+              {vizType !== 'table' && !isYoYMode && (
                 <div className="flex items-center gap-2">
                   <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
                     <button
