@@ -574,12 +574,34 @@ export function Dashboard() {
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
                   <EmploymentChart
                     data={displayData}
-                    title="Työlliset ja työttömät (tuhatta henkilöä)"
+                    title="Työlliset (tuhatta henkilöä)"
                     lines={[
                       { dataKey: 'employed', color: '#2563eb', name: 'Työlliset' },
+                    ]}
+                    yAxisLabel="Tuhansia"
+                    yoyConfig={{ dataKey: 'employed', title: 'Työlliset - vuosimuutos (%)', unit: '%', isRate: false }}
+                  />
+                </div>
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
+                  <EmploymentChart
+                    data={displayData}
+                    title="Työttömät (tuhatta henkilöä)"
+                    lines={[
                       { dataKey: 'unemployed', color: '#dc2626', name: 'Työttömät' },
                     ]}
                     yAxisLabel="Tuhansia"
+                    yoyConfig={{ dataKey: 'unemployed', title: 'Työttömät - vuosimuutos (%)', unit: '%', isRate: false }}
+                  />
+                </div>
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
+                  <EmploymentChart
+                    data={displayData}
+                    title="Työllisyysaste (%)"
+                    lines={[
+                      { dataKey: 'employmentRate', color: '#059669', name: 'Työllisyysaste' },
+                    ]}
+                    yAxisLabel="%"
+                    yoyConfig={{ dataKey: 'employmentRate', title: 'Työllisyysaste - vuosimuutos (pp)', unit: 'pp', isRate: true }}
                   />
                 </div>
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
