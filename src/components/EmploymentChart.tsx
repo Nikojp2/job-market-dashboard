@@ -85,6 +85,27 @@ export function EmploymentChart({
     ? [{ dataKey: 'yoyValue', color: lines[0]?.color || '#3b82f6', name: `Muutos ${yoyConfig?.unit}` }]
     : lines;
 
+  // Helper function to calculate "nice" round numbers for axis bounds
+  const getNiceNumber = (value: number, roundUp: boolean): number => {
+    const exponent = Math.floor(Math.log10(Math.abs(value) || 1));
+    const fraction = value / Math.pow(10, exponent);
+    let niceFraction: number;
+
+    if (roundUp) {
+      if (fraction <= 1) niceFraction = 1;
+      else if (fraction <= 2) niceFraction = 2;
+      else if (fraction <= 5) niceFraction = 5;
+      else niceFraction = 10;
+    } else {
+      if (fraction < 1.5) niceFraction = 1;
+      else if (fraction < 3) niceFraction = 2;
+      else if (fraction < 7) niceFraction = 5;
+      else niceFraction = 10;
+    }
+
+    return niceFraction * Math.pow(10, exponent);
+  };
+
   // Calculate the Y-axis domain based on scale mode
   const yAxisDomain = useMemo((): [number, number] | undefined => {
     let min = Infinity;
@@ -104,17 +125,19 @@ export function EmploymentChart({
       return undefined;
     }
 
-    // In YoY mode, allow negative values and center around 0 if data crosses zero
+    // In YoY mode, use nice round numbers for better readability
     if (isYoYMode) {
-      const range = max - min;
-      const padding = Math.max(range * 0.15, 0.5);
+      // If data crosses zero, make symmetric around zero
       if (min < 0 && max > 0) {
         const absMax = Math.max(Math.abs(min), Math.abs(max));
-        const niceAbsMax = Math.ceil((absMax + padding) * 10) / 10;
-        return [-niceAbsMax, niceAbsMax] as [number, number];
+        const niceMax = getNiceNumber(absMax * 1.1, true);
+        return [-niceMax, niceMax] as [number, number];
       }
-      const niceMin = Math.floor((min - padding) * 10) / 10;
-      const niceMax = Math.ceil((max + padding) * 10) / 10;
+      // All positive or all negative - use nice bounds
+      const range = max - min;
+      const padding = range * 0.1;
+      const niceMin = min >= 0 ? 0 : -getNiceNumber(Math.abs(min - padding), true);
+      const niceMax = max <= 0 ? 0 : getNiceNumber(max + padding, true);
       return [niceMin, niceMax] as [number, number];
     }
 
