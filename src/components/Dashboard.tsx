@@ -580,6 +580,14 @@ export function Dashboard() {
                       { dataKey: 'unemployed', color: '#dc2626', name: 'Työttömät' },
                     ]}
                     yAxisLabel="Tuhansia"
+                    yoyConfigs={{
+                      title: 'Työlliset ja työttömät - vuosimuutos (%)',
+                      unit: '%',
+                      lines: [
+                        { dataKey: 'employed', name: 'Työlliset', color: '#2563eb', isRate: false },
+                        { dataKey: 'unemployed', name: 'Työttömät', color: '#dc2626', isRate: false },
+                      ],
+                    }}
                   />
                 </div>
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
@@ -591,6 +599,14 @@ export function Dashboard() {
                       { dataKey: 'unemploymentRate', color: '#7c3aed', name: 'Työttömyysaste' },
                     ]}
                     yAxisLabel="%"
+                    yoyConfigs={{
+                      title: 'Työllisyysaste ja työttömyysaste - vuosimuutos (pp)',
+                      unit: 'pp',
+                      lines: [
+                        { dataKey: 'employmentRate', name: 'Työllisyysaste', color: '#059669', isRate: true },
+                        { dataKey: 'unemploymentRate', name: 'Työttömyysaste', color: '#7c3aed', isRate: true },
+                      ],
+                    }}
                   />
                 </div>
               </div>

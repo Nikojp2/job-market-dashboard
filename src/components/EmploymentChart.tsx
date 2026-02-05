@@ -18,8 +18,8 @@ interface DataPoint {
 
 interface YoYConfig {
   dataKey: string;
-  title: string;
-  unit: string;
+  name: string;
+  color: string;
   isRate: boolean; // If true, show percentage point change; if false, show % change
 }
 
@@ -33,7 +33,12 @@ interface EmploymentChartProps {
     dashed?: boolean;
   }[];
   yAxisLabel?: string;
-  yoyConfig?: YoYConfig;
+  yoyConfig?: { dataKey: string; title: string; unit: string; isRate: boolean }; // Single line YoY (backward compatible)
+  yoyConfigs?: { // Multi-line YoY
+    title: string;
+    unit: string;
+    lines: YoYConfig[];
+  };
 }
 
 export function EmploymentChart({
@@ -42,12 +47,18 @@ export function EmploymentChart({
   lines,
   yAxisLabel,
   yoyConfig,
+  yoyConfigs,
 }: EmploymentChartProps) {
   const [scaleMode, setScaleMode] = useState<'absolute' | 'relative'>('absolute');
   const [showYoY, setShowYoY] = useState(false);
 
-  // Calculate YoY data when in YoY mode
-  const yoyData = useMemo(() => {
+  // Determine if we have YoY capability (either single or multi)
+  const hasYoYCapability = yoyConfig || yoyConfigs;
+  const hasEnoughDataForYoY = hasYoYCapability && data.length >= 13;
+  const isYoYMode = showYoY && hasEnoughDataForYoY;
+
+  // Calculate YoY data for single-line mode
+  const singleYoyData = useMemo(() => {
     if (!yoyConfig || data.length < 13) return [];
 
     return data
@@ -63,10 +74,8 @@ export function EmploymentChart({
 
         let yoyValue: number;
         if (yoyConfig.isRate) {
-          // For rates, show percentage point change
           yoyValue = currentVal - yearAgoVal;
         } else {
-          // For counts, show % change
           yoyValue = yearAgoVal === 0 ? 0 : ((currentVal - yearAgoVal) / yearAgoVal) * 100;
         }
 
@@ -74,19 +83,67 @@ export function EmploymentChart({
       });
   }, [data, yoyConfig]);
 
-  const hasEnoughDataForYoY = yoyConfig && data.length >= 13;
-  const isYoYMode = showYoY && hasEnoughDataForYoY;
-  const displayData = isYoYMode ? yoyData : data;
-  const displayTitle = isYoYMode && yoyConfig ? yoyConfig.title : title;
-  const displayYAxisLabel = isYoYMode && yoyConfig ? yoyConfig.unit : yAxisLabel;
+  // Calculate YoY data for multi-line mode
+  const multiYoyData = useMemo(() => {
+    if (!yoyConfigs || data.length < 13) return [];
 
-  // Lines to display - in YoY mode, just show the YoY value
-  const displayLines = isYoYMode
-    ? [{ dataKey: 'yoyValue', color: lines[0]?.color || '#3b82f6', name: `Muutos ${yoyConfig?.unit}` }]
-    : lines;
+    return data
+      .slice(12)
+      .map((current, index) => {
+        const yearAgo = data[index];
+        const result: DataPoint = { period: current.period };
+
+        yoyConfigs.lines.forEach((config) => {
+          const currentVal = current[config.dataKey];
+          const yearAgoVal = yearAgo[config.dataKey];
+
+          if (typeof currentVal !== 'number' || typeof yearAgoVal !== 'number') {
+            result[`yoy_${config.dataKey}`] = 0;
+            return;
+          }
+
+          if (config.isRate) {
+            result[`yoy_${config.dataKey}`] = currentVal - yearAgoVal;
+          } else {
+            result[`yoy_${config.dataKey}`] = yearAgoVal === 0 ? 0 : ((currentVal - yearAgoVal) / yearAgoVal) * 100;
+          }
+        });
+
+        return result;
+      });
+  }, [data, yoyConfigs]);
+
+  // Determine display data and configuration based on mode
+  const displayData = isYoYMode
+    ? (yoyConfigs ? multiYoyData : singleYoyData)
+    : data;
+
+  const displayTitle = isYoYMode
+    ? (yoyConfigs?.title || yoyConfig?.title || title)
+    : title;
+
+  const displayYAxisLabel = isYoYMode
+    ? (yoyConfigs?.unit || yoyConfig?.unit || yAxisLabel)
+    : yAxisLabel;
+
+  // Lines to display
+  const displayLines = useMemo(() => {
+    if (isYoYMode) {
+      if (yoyConfigs) {
+        return yoyConfigs.lines.map((config) => ({
+          dataKey: `yoy_${config.dataKey}`,
+          color: config.color,
+          name: config.name,
+        }));
+      }
+      return [{ dataKey: 'yoyValue', color: lines[0]?.color || '#3b82f6', name: `Muutos ${yoyConfig?.unit}` }];
+    }
+    return lines;
+  }, [isYoYMode, yoyConfigs, yoyConfig, lines]);
 
   // Helper function to calculate "nice" round numbers for axis bounds
   const getNiceNumber = (value: number, roundUp: boolean): number => {
+    if (value === 0) return 0;
     const exponent = Math.floor(Math.log10(Math.abs(value) || 1));
     const fraction = value / Math.pow(10, exponent);
     let niceFraction: number;
@@ -160,7 +217,7 @@ export function EmploymentChart({
         <h3 className="text-lg font-semibold text-slate-800">{displayTitle}</h3>
         <div className="flex items-center gap-2">
           {/* YoY Toggle */}
-          {yoyConfig && (
+          {hasYoYCapability && (
             <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg">
               <button
                 onClick={() => setShowYoY(false)}
@@ -218,7 +275,7 @@ export function EmploymentChart({
               </svg>
             </button>
             <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-              {yoyConfig && (
+              {hasYoYCapability && (
                 <>
                   <p className="font-semibold mb-2">Näyttövalinnat:</p>
                   <p className="mb-2"><span className="font-medium">Arvo:</span> Näyttää alkuperäiset arvot.</p>
@@ -295,7 +352,8 @@ export function EmploymentChart({
             }}
             formatter={isYoYMode ? (value: number) => {
               const sign = value >= 0 ? '+' : '';
-              return [`${sign}${value.toFixed(2)} ${yoyConfig?.unit || ''}`];
+              const unit = yoyConfigs?.unit || yoyConfig?.unit || '';
+              return [`${sign}${value.toFixed(2)} ${unit}`];
             } : undefined}
           />
           <Legend
