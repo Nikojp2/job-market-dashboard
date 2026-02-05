@@ -14,6 +14,7 @@ This file tracks completed work and planned features. Share this at the start of
   - Shows percentage change for counts, percentage point change for rates
   - Reference line at 0% in YoY mode
   - Scale toggle hidden when in YoY mode (not applicable)
+  - Added to Dashboard (Työvoimatutkimus tab) with multi-line chart support
   - Added to TrendsSection (quarterly data uses 4 quarters back, monthly uses 12 months)
   - Works with multi-region comparison
 - Add YoY toggle to Hiekkalaatikko (Sandbox)
@@ -21,6 +22,12 @@ This file tracks completed work and planned features. Share this at the start of
   - YoY toggle appears after data is fetched
   - CSV export reflects current mode (YoY or absolute)
   - Works with all visualization types (line, bar, table)
+- Improve Y-axis readability with getNiceNumber algorithm
+  - Rounds axis bounds to clean values (1, 2, 5, 10 intervals)
+  - Symmetric bounds around zero when data crosses zero
+- Fix TypeScript errors for Vercel build
+  - Fix Tooltip formatter type to handle all Recharts value types
+  - Fix displayLines to always include dashed property explicitly
 
 ### 2026-02-02
 - Add detailed logging and redirect handling to API proxy
