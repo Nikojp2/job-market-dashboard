@@ -8,11 +8,19 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  ReferenceLine,
 } from 'recharts';
 
 interface DataPoint {
   period: string;
   [key: string]: string | number;
+}
+
+interface YoYConfig {
+  dataKey: string;
+  title: string;
+  unit: string;
+  isRate: boolean; // If true, show percentage point change; if false, show % change
 }
 
 interface EmploymentChartProps {
@@ -25,6 +33,7 @@ interface EmploymentChartProps {
     dashed?: boolean;
   }[];
   yAxisLabel?: string;
+  yoyConfig?: YoYConfig;
 }
 
 export function EmploymentChart({
@@ -32,17 +41,57 @@ export function EmploymentChart({
   title,
   lines,
   yAxisLabel,
+  yoyConfig,
 }: EmploymentChartProps) {
   const [scaleMode, setScaleMode] = useState<'absolute' | 'relative'>('absolute');
+  const [showYoY, setShowYoY] = useState(false);
+
+  // Calculate YoY data when in YoY mode
+  const yoyData = useMemo(() => {
+    if (!yoyConfig || data.length < 13) return [];
+
+    return data
+      .slice(12)
+      .map((current, index) => {
+        const yearAgo = data[index];
+        const currentVal = current[yoyConfig.dataKey];
+        const yearAgoVal = yearAgo[yoyConfig.dataKey];
+
+        if (typeof currentVal !== 'number' || typeof yearAgoVal !== 'number') {
+          return { period: current.period, yoyValue: 0 };
+        }
+
+        let yoyValue: number;
+        if (yoyConfig.isRate) {
+          // For rates, show percentage point change
+          yoyValue = currentVal - yearAgoVal;
+        } else {
+          // For counts, show % change
+          yoyValue = yearAgoVal === 0 ? 0 : ((currentVal - yearAgoVal) / yearAgoVal) * 100;
+        }
+
+        return { period: current.period, yoyValue };
+      });
+  }, [data, yoyConfig]);
+
+  const hasEnoughDataForYoY = yoyConfig && data.length >= 13;
+  const isYoYMode = showYoY && hasEnoughDataForYoY;
+  const displayData = isYoYMode ? yoyData : data;
+  const displayTitle = isYoYMode && yoyConfig ? yoyConfig.title : title;
+  const displayYAxisLabel = isYoYMode && yoyConfig ? yoyConfig.unit : yAxisLabel;
+
+  // Lines to display - in YoY mode, just show the YoY value
+  const displayLines = isYoYMode
+    ? [{ dataKey: 'yoyValue', color: lines[0]?.color || '#3b82f6', name: `Muutos ${yoyConfig?.unit}` }]
+    : lines;
 
   // Calculate the Y-axis domain based on scale mode
   const yAxisDomain = useMemo((): [number, number] | undefined => {
-    // Find min and max values across all lines
     let min = Infinity;
     let max = -Infinity;
 
-    data.forEach((point) => {
-      lines.forEach((line) => {
+    displayData.forEach((point) => {
+      displayLines.forEach((line) => {
         const value = point[line.dataKey];
         if (typeof value === 'number' && !isNaN(value)) {
           min = Math.min(min, value);
@@ -55,50 +104,90 @@ export function EmploymentChart({
       return undefined;
     }
 
+    // In YoY mode, allow negative values and center around 0 if data crosses zero
+    if (isYoYMode) {
+      const range = max - min;
+      const padding = Math.max(range * 0.15, 0.5);
+      if (min < 0 && max > 0) {
+        const absMax = Math.max(Math.abs(min), Math.abs(max));
+        const niceAbsMax = Math.ceil((absMax + padding) * 10) / 10;
+        return [-niceAbsMax, niceAbsMax] as [number, number];
+      }
+      const niceMin = Math.floor((min - padding) * 10) / 10;
+      const niceMax = Math.ceil((max + padding) * 10) / 10;
+      return [niceMin, niceMax] as [number, number];
+    }
+
     if (scaleMode === 'absolute') {
-      // Zero-based: start from 0, go to max with some padding
       const niceMax = Math.ceil(max * 1.1);
       return [0, niceMax] as [number, number];
     }
 
-    // Relative mode: focus on the data range to highlight changes
     const range = max - min;
     const padding = range * 0.15;
-
-    // Round to nice numbers
     const niceMin = Math.max(0, Math.floor((min - padding) / 10) * 10);
     const niceMax = Math.ceil((max + padding) / 10) * 10;
 
     return [niceMin, niceMax] as [number, number];
-  }, [data, lines, scaleMode]);
+  }, [displayData, displayLines, scaleMode, isYoYMode]);
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
+        <h3 className="text-lg font-semibold text-slate-800">{displayTitle}</h3>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg">
-            <button
-              onClick={() => setScaleMode('absolute')}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                scaleMode === 'absolute'
-                  ? 'bg-white text-slate-700 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              Absoluuttinen
-            </button>
-            <button
-              onClick={() => setScaleMode('relative')}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                scaleMode === 'relative'
-                  ? 'bg-white text-slate-700 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              Suhteellinen
-            </button>
-          </div>
+          {/* YoY Toggle */}
+          {yoyConfig && (
+            <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg">
+              <button
+                onClick={() => setShowYoY(false)}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                  !showYoY
+                    ? 'bg-white text-slate-700 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Arvo
+              </button>
+              <button
+                onClick={() => setShowYoY(true)}
+                disabled={!hasEnoughDataForYoY}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                  showYoY && hasEnoughDataForYoY
+                    ? 'bg-white text-slate-700 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                } ${!hasEnoughDataForYoY ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title={!hasEnoughDataForYoY ? 'Vähintään 13 kuukautta dataa vaaditaan' : undefined}
+              >
+                Vuosimuutos
+              </button>
+            </div>
+          )}
+          {/* Scale Toggle - only show when not in YoY mode */}
+          {!isYoYMode && (
+            <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg">
+              <button
+                onClick={() => setScaleMode('absolute')}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                  scaleMode === 'absolute'
+                    ? 'bg-white text-slate-700 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Absoluuttinen
+              </button>
+              <button
+                onClick={() => setScaleMode('relative')}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                  scaleMode === 'relative'
+                    ? 'bg-white text-slate-700 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Suhteellinen
+              </button>
+            </div>
+          )}
           <div className="relative group">
             <button className="p-1 text-slate-400 hover:text-slate-600 transition-colors">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -106,18 +195,25 @@ export function EmploymentChart({
               </svg>
             </button>
             <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+              {yoyConfig && (
+                <>
+                  <p className="font-semibold mb-2">Näyttövalinnat:</p>
+                  <p className="mb-2"><span className="font-medium">Arvo:</span> Näyttää alkuperäiset arvot.</p>
+                  <p className="mb-3"><span className="font-medium">Vuosimuutos:</span> Näyttää muutoksen verrattuna saman kuukauden arvoon edelliseltä vuodelta.</p>
+                </>
+              )}
               <p className="font-semibold mb-2">Skaalausvalinnat:</p>
-              <p className="mb-2"><span className="font-medium">Absoluuttinen:</span> Y-akseli alkaa nollasta. Näyttää arvojen todelliset suhteet, mutta pienet muutokset voivat olla vaikeita havaita.</p>
-              <p><span className="font-medium">Suhteellinen:</span> Y-akseli mukautuu datan vaihteluväliin. Korostaa muutoksia ja trendejä, mutta voi liioitella pieniä eroja.</p>
+              <p className="mb-2"><span className="font-medium">Absoluuttinen:</span> Y-akseli alkaa nollasta.</p>
+              <p><span className="font-medium">Suhteellinen:</span> Y-akseli mukautuu datan vaihteluväliin.</p>
               <div className="absolute -top-1 right-3 w-2 h-2 bg-slate-800 rotate-45"></div>
             </div>
           </div>
         </div>
       </div>
       <ResponsiveContainer width="100%" height={300}>
-        <LineChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+        <LineChart data={displayData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
           <defs>
-            {lines.map((line) => (
+            {displayLines.map((line) => (
               <linearGradient key={`gradient-${line.dataKey}`} id={`gradient-${line.dataKey}`} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor={line.color} stopOpacity={0.1}/>
                 <stop offset="95%" stopColor={line.color} stopOpacity={0}/>
@@ -125,6 +221,9 @@ export function EmploymentChart({
             ))}
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+          {isYoYMode && (
+            <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="4 4" />
+          )}
           <XAxis
             dataKey="period"
             tick={{ fontSize: 11, fill: '#64748b' }}
@@ -144,8 +243,8 @@ export function EmploymentChart({
             axisLine={false}
             domain={yAxisDomain}
             label={
-              yAxisLabel
-                ? { value: yAxisLabel, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#94a3b8' } }
+              displayYAxisLabel
+                ? { value: displayYAxisLabel, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#94a3b8' } }
                 : undefined
             }
           />
@@ -171,13 +270,17 @@ export function EmploymentChart({
               }
               return label;
             }}
+            formatter={isYoYMode ? (value: number) => {
+              const sign = value >= 0 ? '+' : '';
+              return [`${sign}${value.toFixed(2)} ${yoyConfig?.unit || ''}`];
+            } : undefined}
           />
           <Legend
             wrapperStyle={{ paddingTop: 20 }}
             iconType="circle"
             iconSize={8}
           />
-          {lines.map((line) => (
+          {displayLines.map((line) => (
             <Line
               key={line.dataKey}
               type="monotone"

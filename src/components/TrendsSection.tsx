@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   LineChart,
   Line,
@@ -8,6 +8,7 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  ReferenceLine,
 } from 'recharts';
 import { MultiRegionSelect } from './MultiRegionSelect';
 import { REGION_COLORS } from '../constants/colors';
@@ -21,6 +22,209 @@ import {
 interface MultiRegionTrendData {
   period: string;
   [key: string]: string | number; // Dynamic keys for each region's metrics
+}
+
+// Individual chart component with YoY toggle
+interface TrendChartProps {
+  data: MultiRegionTrendData[];
+  title: string;
+  yoyTitle: string;
+  metricPrefix: string;
+  selectedRegions: string[];
+  getRegionLabel: (code: string) => string;
+  getColorForRegion: (code: string) => string;
+  formatPeriod: (value: unknown) => string;
+  yAxisLabel?: string;
+  yoyUnit: string;
+  isRate: boolean; // If true, show pp change; if false, show % change
+  periodsBack: number; // 4 for quarterly, 12 for monthly
+}
+
+function TrendChart({
+  data,
+  title,
+  yoyTitle,
+  metricPrefix,
+  selectedRegions,
+  getRegionLabel,
+  getColorForRegion,
+  formatPeriod,
+  yAxisLabel,
+  yoyUnit,
+  isRate,
+  periodsBack,
+}: TrendChartProps) {
+  const [showYoY, setShowYoY] = useState(false);
+
+  const hasEnoughData = data.length > periodsBack;
+  const isYoYMode = showYoY && hasEnoughData;
+
+  // Calculate YoY data
+  const yoyData = useMemo(() => {
+    if (!hasEnoughData) return [];
+
+    return data.slice(periodsBack).map((current, index) => {
+      const yearAgo = data[index];
+      const result: MultiRegionTrendData = { period: current.period };
+
+      selectedRegions.forEach((regionCode) => {
+        const currentKey = `${metricPrefix}_${regionCode}`;
+        const yoyKey = `${metricPrefix}_yoy_${regionCode}`;
+        const currentVal = current[currentKey];
+        const yearAgoVal = yearAgo[currentKey];
+
+        if (typeof currentVal === 'number' && typeof yearAgoVal === 'number') {
+          if (isRate) {
+            // Percentage point change for rates
+            result[yoyKey] = currentVal - yearAgoVal;
+          } else {
+            // Percentage change for counts
+            result[yoyKey] = yearAgoVal === 0 ? 0 : ((currentVal - yearAgoVal) / yearAgoVal) * 100;
+          }
+        } else {
+          result[yoyKey] = 0;
+        }
+      });
+
+      return result;
+    });
+  }, [data, selectedRegions, metricPrefix, isRate, periodsBack, hasEnoughData]);
+
+  const displayData = isYoYMode ? yoyData : data;
+  const displayTitle = isYoYMode ? yoyTitle : title;
+
+  // Generate lines for current mode
+  const lines = selectedRegions.map((regionCode) => ({
+    dataKey: isYoYMode ? `${metricPrefix}_yoy_${regionCode}` : `${metricPrefix}_${regionCode}`,
+    color: getColorForRegion(regionCode),
+    name: selectedRegions.length > 1
+      ? `${isYoYMode ? `Muutos ${yoyUnit}` : title.split(' ')[0]} (${getRegionLabel(regionCode)})`
+      : isYoYMode ? `Muutos ${yoyUnit}` : title.split(' ')[0],
+  }));
+
+  // Calculate Y-axis domain
+  const yAxisDomain = useMemo((): [number, number] | undefined => {
+    let min = Infinity;
+    let max = -Infinity;
+
+    displayData.forEach((point) => {
+      lines.forEach((line) => {
+        const value = point[line.dataKey];
+        if (typeof value === 'number' && !isNaN(value)) {
+          min = Math.min(min, value);
+          max = Math.max(max, value);
+        }
+      });
+    });
+
+    if (min === Infinity || max === -Infinity) {
+      return undefined;
+    }
+
+    if (isYoYMode) {
+      const range = max - min;
+      const padding = Math.max(range * 0.15, 0.5);
+      if (min < 0 && max > 0) {
+        const absMax = Math.max(Math.abs(min), Math.abs(max));
+        const niceAbsMax = Math.ceil((absMax + padding) * 10) / 10;
+        return [-niceAbsMax, niceAbsMax];
+      }
+      const niceMin = Math.floor((min - padding) * 10) / 10;
+      const niceMax = Math.ceil((max + padding) * 10) / 10;
+      return [niceMin, niceMax];
+    }
+
+    return ['auto', 'auto'] as unknown as [number, number];
+  }, [displayData, lines, isYoYMode]);
+
+  const tooltipStyle = {
+    contentStyle: {
+      backgroundColor: 'white',
+      border: 'none',
+      borderRadius: '12px',
+      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+      padding: '12px 16px',
+    },
+    labelStyle: { color: '#1e293b', fontWeight: 600, marginBottom: 4 },
+    itemStyle: { color: '#475569', fontSize: 13 },
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-lg font-semibold text-slate-800">{displayTitle}</h3>
+        <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg">
+          <button
+            onClick={() => setShowYoY(false)}
+            className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+              !showYoY
+                ? 'bg-white text-slate-700 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Arvo
+          </button>
+          <button
+            onClick={() => setShowYoY(true)}
+            disabled={!hasEnoughData}
+            className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+              showYoY && hasEnoughData
+                ? 'bg-white text-slate-700 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            } ${!hasEnoughData ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title={!hasEnoughData ? 'Vähintään 5 vuosineljännestä dataa vaaditaan' : undefined}
+          >
+            Vuosimuutos
+          </button>
+        </div>
+      </div>
+      <ResponsiveContainer width="100%" height={250}>
+        <LineChart data={displayData}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+          {isYoYMode && <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="4 4" />}
+          <XAxis
+            dataKey="period"
+            tick={{ fontSize: 11, fill: '#64748b' }}
+            tickLine={false}
+            axisLine={{ stroke: '#e2e8f0' }}
+            tickFormatter={formatPeriod}
+          />
+          <YAxis
+            tick={{ fontSize: 11, fill: '#64748b' }}
+            tickLine={false}
+            axisLine={false}
+            domain={yAxisDomain}
+            label={
+              yAxisLabel || isYoYMode
+                ? { value: isYoYMode ? yoyUnit : yAxisLabel, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#94a3b8' } }
+                : undefined
+            }
+          />
+          <Tooltip
+            {...tooltipStyle}
+            labelFormatter={formatPeriod}
+            formatter={isYoYMode ? (value: number) => {
+              const sign = value >= 0 ? '+' : '';
+              return [`${sign}${value.toFixed(2)} ${yoyUnit}`];
+            } : undefined}
+          />
+          <Legend iconType="circle" iconSize={8} wrapperStyle={{ paddingTop: 16 }} />
+          {lines.map((line) => (
+            <Line
+              key={line.dataKey}
+              type="monotone"
+              dataKey={line.dataKey}
+              stroke={line.color}
+              name={line.name}
+              strokeWidth={2.5}
+              dot={false}
+              activeDot={{ r: 6, strokeWidth: 2, fill: 'white' }}
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
 }
 
 export function TrendsSection() {
@@ -129,18 +333,6 @@ export function TrendsSection() {
     return value;
   };
 
-  const tooltipStyle = {
-    contentStyle: {
-      backgroundColor: 'white',
-      border: 'none',
-      borderRadius: '12px',
-      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
-      padding: '12px 16px',
-    },
-    labelStyle: { color: '#1e293b', fontWeight: 600, marginBottom: 4 },
-    itemStyle: { color: '#475569', fontSize: 13 },
-  };
-
   const getRegionLabel = (regionCode: string) => {
     const option = REGION_OPTIONS.find((o) => o.value === regionCode);
     return option?.label || regionCode;
@@ -149,15 +341,6 @@ export function TrendsSection() {
   const getColorForRegion = (regionCode: string) => {
     const index = selectedRegions.indexOf(regionCode);
     return REGION_COLORS[index % REGION_COLORS.length];
-  };
-
-  // Generate lines configuration for a metric
-  const generateLines = (metricPrefix: string, namePrefix: string) => {
-    return selectedRegions.map((regionCode) => ({
-      dataKey: `${metricPrefix}_${regionCode}`,
-      color: getColorForRegion(regionCode),
-      name: selectedRegions.length > 1 ? `${namePrefix} (${getRegionLabel(regionCode)})` : namePrefix,
-    }));
   };
 
   if (loading) {
@@ -242,133 +425,85 @@ export function TrendsSection() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Employment Rate Chart */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
-            <h3 className="text-lg font-semibold text-slate-800 mb-6">Työllisyysaste (%)</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} tickFormatter={formatQuarter} />
-                <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} domain={['auto', 'auto']} />
-                <Tooltip {...tooltipStyle} labelFormatter={formatQuarter} />
-                <Legend iconType="circle" iconSize={8} wrapperStyle={{ paddingTop: 16 }} />
-                {generateLines('employmentRate', 'Työllisyysaste').map((line) => (
-                  <Line
-                    key={line.dataKey}
-                    type="monotone"
-                    dataKey={line.dataKey}
-                    stroke={line.color}
-                    name={line.name}
-                    strokeWidth={2.5}
-                    dot={false}
-                    activeDot={{ r: 6, strokeWidth: 2, fill: 'white' }}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <TrendChart
+            data={trendData}
+            title="Työllisyysaste (%)"
+            yoyTitle="Työllisyysaste - vuosimuutos (pp)"
+            metricPrefix="employmentRate"
+            selectedRegions={selectedRegions}
+            getRegionLabel={getRegionLabel}
+            getColorForRegion={getColorForRegion}
+            formatPeriod={formatQuarter}
+            yAxisLabel="%"
+            yoyUnit="pp"
+            isRate={true}
+            periodsBack={4}
+          />
 
           {/* Unemployment Rate Chart */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
-            <h3 className="text-lg font-semibold text-slate-800 mb-6">Työttömyysaste (%)</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} tickFormatter={formatQuarter} />
-                <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} domain={['auto', 'auto']} />
-                <Tooltip {...tooltipStyle} labelFormatter={formatQuarter} />
-                <Legend iconType="circle" iconSize={8} wrapperStyle={{ paddingTop: 16 }} />
-                {generateLines('unemploymentRate', 'Työttömyysaste').map((line) => (
-                  <Line
-                    key={line.dataKey}
-                    type="monotone"
-                    dataKey={line.dataKey}
-                    stroke={line.color}
-                    name={line.name}
-                    strokeWidth={2.5}
-                    dot={false}
-                    activeDot={{ r: 6, strokeWidth: 2, fill: 'white' }}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <TrendChart
+            data={trendData}
+            title="Työttömyysaste (%)"
+            yoyTitle="Työttömyysaste - vuosimuutos (pp)"
+            metricPrefix="unemploymentRate"
+            selectedRegions={selectedRegions}
+            getRegionLabel={getRegionLabel}
+            getColorForRegion={getColorForRegion}
+            formatPeriod={formatQuarter}
+            yAxisLabel="%"
+            yoyUnit="pp"
+            isRate={true}
+            periodsBack={4}
+          />
 
           {/* Employed Count Chart */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
-            <h3 className="text-lg font-semibold text-slate-800 mb-6">Työllisten määrä (1000 henkilöä)</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} tickFormatter={formatQuarter} />
-                <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
-                <Tooltip {...tooltipStyle} labelFormatter={formatQuarter} />
-                <Legend iconType="circle" iconSize={8} wrapperStyle={{ paddingTop: 16 }} />
-                {generateLines('employed', 'Työlliset').map((line) => (
-                  <Line
-                    key={line.dataKey}
-                    type="monotone"
-                    dataKey={line.dataKey}
-                    stroke={line.color}
-                    name={line.name}
-                    strokeWidth={2.5}
-                    dot={false}
-                    activeDot={{ r: 6, strokeWidth: 2, fill: 'white' }}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <TrendChart
+            data={trendData}
+            title="Työllisten määrä (1000 henkilöä)"
+            yoyTitle="Työllisten määrä - vuosimuutos (%)"
+            metricPrefix="employed"
+            selectedRegions={selectedRegions}
+            getRegionLabel={getRegionLabel}
+            getColorForRegion={getColorForRegion}
+            formatPeriod={formatQuarter}
+            yAxisLabel="1000"
+            yoyUnit="%"
+            isRate={false}
+            periodsBack={4}
+          />
 
           {/* Labour Force Chart */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
-            <h3 className="text-lg font-semibold text-slate-800 mb-6">Työvoiman määrä (1000 henkilöä)</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} tickFormatter={formatQuarter} />
-                <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
-                <Tooltip {...tooltipStyle} labelFormatter={formatQuarter} />
-                <Legend iconType="circle" iconSize={8} wrapperStyle={{ paddingTop: 16 }} />
-                {generateLines('labourForce', 'Työvoima').map((line) => (
-                  <Line
-                    key={line.dataKey}
-                    type="monotone"
-                    dataKey={line.dataKey}
-                    stroke={line.color}
-                    name={line.name}
-                    strokeWidth={2.5}
-                    dot={false}
-                    activeDot={{ r: 6, strokeWidth: 2, fill: 'white' }}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <TrendChart
+            data={trendData}
+            title="Työvoiman määrä (1000 henkilöä)"
+            yoyTitle="Työvoiman määrä - vuosimuutos (%)"
+            metricPrefix="labourForce"
+            selectedRegions={selectedRegions}
+            getRegionLabel={getRegionLabel}
+            getColorForRegion={getColorForRegion}
+            formatPeriod={formatQuarter}
+            yAxisLabel="1000"
+            yoyUnit="%"
+            isRate={false}
+            periodsBack={4}
+          />
 
           {/* Open Positions Chart */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md lg:col-span-2">
-            <h3 className="text-lg font-semibold text-slate-800 mb-6">Avoimet työpaikat (kpl)</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={openPositionsData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} tickFormatter={formatMonth} />
-                <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
-                <Tooltip {...tooltipStyle} labelFormatter={formatMonth} />
-                <Legend iconType="circle" iconSize={8} wrapperStyle={{ paddingTop: 16 }} />
-                {generateLines('openPositions', 'Avoimet paikat').map((line) => (
-                  <Line
-                    key={line.dataKey}
-                    type="monotone"
-                    dataKey={line.dataKey}
-                    stroke={line.color}
-                    name={line.name}
-                    strokeWidth={2.5}
-                    dot={false}
-                    activeDot={{ r: 6, strokeWidth: 2, fill: 'white' }}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
+          <div className="lg:col-span-2">
+            <TrendChart
+              data={openPositionsData}
+              title="Avoimet työpaikat (kpl)"
+              yoyTitle="Avoimet työpaikat - vuosimuutos (%)"
+              metricPrefix="openPositions"
+              selectedRegions={selectedRegions}
+              getRegionLabel={getRegionLabel}
+              getColorForRegion={getColorForRegion}
+              formatPeriod={formatMonth}
+              yAxisLabel="kpl"
+              yoyUnit="%"
+              isRate={false}
+              periodsBack={12}
+            />
           </div>
         </div>
       )}

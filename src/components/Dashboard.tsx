@@ -199,16 +199,16 @@ export function Dashboard() {
     return Math.round(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   };
 
-  const displayData = chartData.slice(-(yearRange * 12));
-  const displayTrendData = trendData.slice(-(yearRange * 12));
-  const rangeStartData = displayData[0];
-  const latestTrendData = trendData[trendData.length - 1];
-
   const calculateTrend = (current: number, previous: number): 'up' | 'down' | 'neutral' => {
     if (current > previous) return 'up';
     if (current < previous) return 'down';
     return 'neutral';
   };
+
+  const displayData = chartData.slice(-(yearRange * 12));
+  const displayTrendData = trendData.slice(-(yearRange * 12));
+  const rangeStartData = displayData[0];
+  const latestTrendData = trendData[trendData.length - 1];
 
   if (loading) {
     return (
@@ -495,6 +495,7 @@ export function Dashboard() {
                       { dataKey: 'employedTrend', color: '#064e3b', name: 'Trendi', dashed: true },
                     ]}
                     yAxisLabel="Tuhansia"
+                    yoyConfig={{ dataKey: 'employed', title: 'Työlliset - vuosimuutos (%)', unit: '%', isRate: false }}
                   />
                 </div>
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
@@ -506,6 +507,7 @@ export function Dashboard() {
                       { dataKey: 'employmentRateTrend', color: '#064e3b', name: 'Trendi', dashed: true },
                     ]}
                     yAxisLabel="%"
+                    yoyConfig={{ dataKey: 'employmentRate', title: 'Työllisyysaste - vuosimuutos (pp)', unit: 'pp', isRate: true }}
                   />
                 </div>
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
@@ -517,6 +519,7 @@ export function Dashboard() {
                       { dataKey: 'unemployedTrend', color: '#881337', name: 'Trendi', dashed: true },
                     ]}
                     yAxisLabel="Tuhansia"
+                    yoyConfig={{ dataKey: 'unemployed', title: 'Työttömät - vuosimuutos (%)', unit: '%', isRate: false }}
                   />
                 </div>
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
@@ -528,6 +531,7 @@ export function Dashboard() {
                       { dataKey: 'unemploymentRateTrend', color: '#4c1d95', name: 'Trendi', dashed: true },
                     ]}
                     yAxisLabel="%"
+                    yoyConfig={{ dataKey: 'unemploymentRate', title: 'Työttömyysaste - vuosimuutos (pp)', unit: 'pp', isRate: true }}
                   />
                 </div>
               </div>
@@ -586,6 +590,7 @@ export function Dashboard() {
                       { dataKey: 'unemploymentRate', color: '#7c3aed', name: 'Työttömyysaste' },
                     ]}
                     yAxisLabel="%"
+                    yoyConfig={{ dataKey: 'unemploymentRate', title: 'Työttömyysaste - vuosimuutos (pp)', unit: 'pp', isRate: true }}
                   />
                 </div>
               </div>
