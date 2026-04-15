@@ -6,13 +6,17 @@ import { RegionalChart } from './RegionalChart';
 import { TrendsSection } from './TrendsSection';
 import { IndustrySection } from './IndustrySection';
 import { SandboxSection } from './SandboxSection';
+import { DataTable } from './DataTable';
 import {
   getMonthlyLabourForceData,
   getKeyIndicatorsWithTrend,
   getJobSeekersByRegion,
+  getOpenPositionsQuarterly,
   parseJsonStat,
   GENDER_OPTIONS,
   AGE_GROUP_OPTIONS,
+  ATP_METRIC_OPTIONS,
+  type AtpMetricValue,
   REGIONS,
 } from '../api/statfin';
 
@@ -53,6 +57,10 @@ export function Dashboard() {
   const [ageGroup, setAgeGroup] = useState('15-74');
   const [activePage, setActivePage] = useState<'avainluvut' | 'tyovoimatutkimus' | 'tyonvalitystilasto' | 'sandbox'>('avainluvut');
   const [yearRange, setYearRange] = useState<number>(2);
+  const [openPositionsData, setOpenPositionsData] = useState<{ period: string; [key: string]: string | number }[]>([]);
+  const [selectedAtpMetric, setSelectedAtpMetric] = useState<AtpMetricValue>('atp_lkm');
+  const [openPositionsQuarterRange, setOpenPositionsQuarterRange] = useState<number>(20);
+  const [openPositionsView, setOpenPositionsView] = useState<'chart' | 'table'>('chart');
 
   useEffect(() => {
     async function fetchData() {
@@ -186,6 +194,36 @@ export function Dashboard() {
     }
 
     fetchRegionalData();
+  }, []);
+
+  // Fetch quarterly open positions from the ATP survey
+  useEffect(() => {
+    async function fetchOpenPositions() {
+      try {
+        const response = await getOpenPositionsQuarterly();
+        const parsed = parseJsonStat(response);
+
+        const quarters = parsed.dimensions['Vuosineljännes'] || [];
+        const metrics = parsed.dimensions['Tiedot'] || [];
+
+        // ATP table returns dimensions in order [Tiedot, Vuosineljännes] (Tiedot is outer/slowest).
+        // Correct index: mIdx * quarters.length + qIdx
+        const transformed = quarters.map((period, qIdx) => {
+          const dataPoint: { period: string; [key: string]: string | number } = { period };
+          metrics.forEach((metricKey, mIdx) => {
+            const valueIndex = mIdx * quarters.length + qIdx;
+            dataPoint[metricKey] = parsed.values[valueIndex] || 0;
+          });
+          return dataPoint;
+        });
+
+        setOpenPositionsData(transformed);
+      } catch (err) {
+        console.error('Failed to fetch open positions data:', err);
+      }
+    }
+
+    fetchOpenPositions();
   }, []);
 
   const latestData = chartData[chartData.length - 1];
@@ -535,6 +573,125 @@ export function Dashboard() {
                   />
                 </div>
               </div>
+            </section>
+
+            {/* Open Positions (ATP survey) */}
+            <section className="mb-12">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800">Avoimet työpaikat</h2>
+                  <p className="text-sm text-slate-500">Avoimet työpaikat -tutkimus, neljännesvuosittain</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Metric slicer — only relevant in chart mode */}
+                  {openPositionsView === 'chart' && (
+                    <div className="flex flex-wrap gap-1 p-1 bg-white/50 backdrop-blur rounded-xl border border-slate-200/50">
+                      {ATP_METRIC_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => setSelectedAtpMetric(opt.value)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            selectedAtpMetric === opt.value
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {/* Quarter range selector */}
+                  <div className="flex gap-1 p-1 bg-white/50 backdrop-blur rounded-xl border border-slate-200/50">
+                    {[8, 12, 20, 40].map((q) => (
+                      <button
+                        key={q}
+                        onClick={() => setOpenPositionsQuarterRange(q)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          openPositionsQuarterRange === q
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        {q === 8 ? '2v' : q === 12 ? '3v' : q === 20 ? '5v' : '10v'}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Chart / Table toggle */}
+                  <div className="flex gap-1 p-1 bg-white/50 backdrop-blur rounded-xl border border-slate-200/50">
+                    {(['chart', 'table'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => setOpenPositionsView(mode)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          openPositionsView === mode
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        {mode === 'chart' ? (
+                          <>
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" />
+                            </svg>
+                            Kaavio
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M10 4v16M4 4h16a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1z" />
+                            </svg>
+                            Taulukko
+                          </>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Data source badge */}
+              <div className="mb-4">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-medium">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Lähde: Avoimet työpaikat -tutkimus (Tilastokeskus) — koko maa, neljännesvuosittain
+                </span>
+              </div>
+
+              {openPositionsData.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all duration-200 hover:shadow-md">
+                  {openPositionsView === 'chart' ? (
+                    <EmploymentChart
+                      data={openPositionsData.slice(-openPositionsQuarterRange)}
+                      title={`${ATP_METRIC_OPTIONS.find((o) => o.value === selectedAtpMetric)?.label ?? 'Avoimet työpaikat'} (kpl)`}
+                      lines={[{ dataKey: selectedAtpMetric, color: '#f59e0b', name: 'Avoimet työpaikat' }]}
+                      yAxisLabel="kpl"
+                      yoyConfig={{
+                        dataKey: selectedAtpMetric,
+                        title: `${ATP_METRIC_OPTIONS.find((o) => o.value === selectedAtpMetric)?.label ?? 'Avoimet työpaikat'} — vuosimuutos (%)`,
+                        unit: '%',
+                        isRate: false,
+                      }}
+                      yoyPeriodsBack={4}
+                    />
+                  ) : (
+                    <DataTable
+                      data={openPositionsData.slice(-openPositionsQuarterRange).reverse().map((row) => ({
+                        period: String(row.period).replace(/(\d{4})Q(\d)/, 'Q$2/$1'),
+                        ...Object.fromEntries(
+                          ATP_METRIC_OPTIONS.map((opt) => [opt.value, row[opt.value]])
+                        ),
+                      }))}
+                      columns={[
+                        { key: 'period', label: 'Neljännes' },
+                        ...ATP_METRIC_OPTIONS.map((opt) => ({ key: opt.value, label: opt.label })),
+                      ]}
+                    />
+                  )}
+                </div>
+              )}
             </section>
           </>
         )}

@@ -39,6 +39,7 @@ interface EmploymentChartProps {
     unit: string;
     lines: YoYConfig[];
   };
+  yoyPeriodsBack?: number; // How many periods back counts as "one year". Default 12 (monthly). Use 4 for quarterly.
 }
 
 export function EmploymentChart({
@@ -48,21 +49,22 @@ export function EmploymentChart({
   yAxisLabel,
   yoyConfig,
   yoyConfigs,
+  yoyPeriodsBack = 12,
 }: EmploymentChartProps) {
   const [scaleMode, setScaleMode] = useState<'absolute' | 'relative'>('absolute');
   const [showYoY, setShowYoY] = useState(false);
 
   // Determine if we have YoY capability (either single or multi)
   const hasYoYCapability = yoyConfig || yoyConfigs;
-  const hasEnoughDataForYoY = hasYoYCapability && data.length >= 13;
+  const hasEnoughDataForYoY = hasYoYCapability && data.length > yoyPeriodsBack;
   const isYoYMode = showYoY && hasEnoughDataForYoY;
 
   // Calculate YoY data for single-line mode
   const singleYoyData = useMemo(() => {
-    if (!yoyConfig || data.length < 13) return [];
+    if (!yoyConfig || data.length <= yoyPeriodsBack) return [];
 
     return data
-      .slice(12)
+      .slice(yoyPeriodsBack)
       .map((current, index) => {
         const yearAgo = data[index];
         const currentVal = current[yoyConfig.dataKey];
@@ -85,10 +87,10 @@ export function EmploymentChart({
 
   // Calculate YoY data for multi-line mode
   const multiYoyData = useMemo(() => {
-    if (!yoyConfigs || data.length < 13) return [];
+    if (!yoyConfigs || data.length <= yoyPeriodsBack) return [];
 
     return data
-      .slice(12)
+      .slice(yoyPeriodsBack)
       .map((current, index) => {
         const yearAgo = data[index];
         const result: DataPoint = { period: current.period };
