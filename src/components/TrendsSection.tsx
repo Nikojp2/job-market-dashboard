@@ -324,14 +324,6 @@ export function TrendsSection() {
     return value;
   };
 
-  const formatMonth = (value: unknown) => {
-    if (typeof value !== 'string') return String(value);
-    if (value.includes('M')) {
-      const [year, month] = value.split('M');
-      return `${month}/${year.slice(2)}`;
-    }
-    return value;
-  };
 
   const getRegionLabel = (regionCode: string) => {
     const option = REGION_OPTIONS.find((o) => o.value === regionCode);
