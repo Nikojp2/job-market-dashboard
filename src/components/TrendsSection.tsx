@@ -14,7 +14,6 @@ import { MultiRegionSelect } from './MultiRegionSelect';
 import { REGION_COLORS } from '../constants/colors';
 import {
   getMultiRegionQuarterlyData,
-  getMultiRegionOpenPositionsTrend,
   parseJsonStat,
   REGION_OPTIONS,
 } from '../api/statfin';
@@ -256,14 +255,12 @@ function TrendChart({
 export function TrendsSection() {
   const [selectedRegions, setSelectedRegions] = useState<string[]>(['SSS']);
   const [trendData, setTrendData] = useState<MultiRegionTrendData[]>([]);
-  const [openPositionsData, setOpenPositionsData] = useState<MultiRegionTrendData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
       if (selectedRegions.length === 0) {
         setTrendData([]);
-        setOpenPositionsData([]);
         setLoading(false);
         return;
       }
@@ -308,29 +305,6 @@ export function TrendsSection() {
         const transformedTrend = Array.from(periodMap.values()).slice(-20); // Last 20 quarters
         setTrendData(transformedTrend);
 
-        // Fetch open positions trend for selected regions
-        const positionsResponse = await getMultiRegionOpenPositionsTrend(selectedRegions);
-        const positionsParsed = parseJsonStat(positionsResponse);
-
-        const months = positionsParsed.dimensions['Kuukausi'] || [];
-        const posRegions = positionsParsed.dimensions['Alue'] || [];
-
-        const positionsPeriodMap = new Map<string, MultiRegionTrendData>();
-        months.forEach((period) => {
-          positionsPeriodMap.set(period, { period });
-        });
-
-        months.forEach((period, monthIndex) => {
-          const dataPoint = positionsPeriodMap.get(period)!;
-          posRegions.forEach((regionCode, regionIndex) => {
-            const valueIndex = monthIndex * posRegions.length + regionIndex;
-            const value = positionsParsed.values[valueIndex] || 0;
-            dataPoint[`openPositions_${regionCode}`] = value;
-          });
-        });
-
-        const transformedPositions = Array.from(positionsPeriodMap.values()).slice(-24); // Last 24 months
-        setOpenPositionsData(transformedPositions);
       } catch (err) {
         console.error('Failed to fetch trends data:', err);
       } finally {
@@ -514,23 +488,6 @@ export function TrendsSection() {
             periodsBack={4}
           />
 
-          {/* Open Positions Chart */}
-          <div className="lg:col-span-2">
-            <TrendChart
-              data={openPositionsData}
-              title="Avoimet työpaikat (kpl)"
-              yoyTitle="Avoimet työpaikat - vuosimuutos (%)"
-              metricPrefix="openPositions"
-              selectedRegions={selectedRegions}
-              getRegionLabel={getRegionLabel}
-              getColorForRegion={getColorForRegion}
-              formatPeriod={formatMonth}
-              yAxisLabel="kpl"
-              yoyUnit="%"
-              isRate={false}
-              periodsBack={12}
-            />
-          </div>
         </div>
       )}
     </div>

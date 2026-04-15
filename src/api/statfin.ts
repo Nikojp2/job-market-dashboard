@@ -10,6 +10,8 @@ export const DATASETS = {
   TYTI: 'tyti',
   // Työnvälitystilasto (Employment Service Statistics)
   TYONV: 'tyonv',
+  // Avoimet työpaikat -tutkimus (Job Vacancy Survey, quarterly)
+  ATP: 'atp',
 } as const;
 
 // Commonly used tables
@@ -30,8 +32,10 @@ export const TABLES = {
   INDUSTRY_EMPLOYMENT: 'statfin_tyti_pxt_13aq.px',
   // Employment by industry (quarterly)
   INDUSTRY_QUARTERLY: 'statfin_tyti_pxt_137l.px',
-  // Open positions by region
+  // Open positions by region (monthly, employment service registry — legacy)
   OPEN_POSITIONS_REGION: 'statfin_tyonv_pxt_12tv.px',
+  // Open positions quarterly survey (national total, accurate source)
+  OPEN_POSITIONS_QUARTERLY: 'statfin_atp_pxt_11l1.px',
   // Unemployed and positions by occupation
   OCCUPATION_DATA: 'statfin_tyonv_pxt_12ti.px',
 } as const;
@@ -372,23 +376,28 @@ export async function getMultiRegionQuarterlyData(
   return queryTable(DATASETS.TYTI, TABLES.REGIONAL_QUARTERLY, query);
 }
 
+// ATP (Avoimet työpaikat -tutkimus) metric options
+export const ATP_METRIC_OPTIONS = [
+  { value: 'atp_lkm',    label: 'Avoimet työpaikat (yhteensä)' },
+  { value: 'atp_eihoit', label: 'Joilla ei ole hoitajaa' },
+  { value: 'atp_osa',    label: 'Osa-aikaiset' },
+  { value: 'atp_maar',   label: 'Määräaikaiset' },
+  { value: 'atp_vaik',   label: 'Vaikeasti täytettävät' },
+] as const;
+
+export type AtpMetricValue = typeof ATP_METRIC_OPTIONS[number]['value'];
+
 /**
- * Fetch open positions trend for multiple regions
+ * Fetch quarterly open job vacancies from the proper ATP survey (all metrics).
+ * Source: Avoimet työpaikat -tutkimus (statfin_atp_pxt_11l1.px)
+ * Covers all open positions in the economy (not just TE-office registered ones).
+ * Time dimension: Vuosineljännes (quarterly), national total only.
  */
-export async function getMultiRegionOpenPositionsTrend(
-  regions: string[]
-): Promise<JsonStatResponse> {
+export async function getOpenPositionsQuarterly(): Promise<JsonStatResponse> {
   const query: PxWebRequest = {
     query: [
       {
-        code: 'Alue',
-        selection: {
-          filter: 'item',
-          values: regions,
-        },
-      },
-      {
-        code: 'Kuukausi',
+        code: 'Vuosineljännes',
         selection: {
           filter: 'all',
           values: ['*'],
@@ -398,7 +407,7 @@ export async function getMultiRegionOpenPositionsTrend(
         code: 'Tiedot',
         selection: {
           filter: 'item',
-          values: ['AVPAIKATLOPUSSA'],
+          values: ATP_METRIC_OPTIONS.map((m) => m.value),
         },
       },
     ],
@@ -407,7 +416,7 @@ export async function getMultiRegionOpenPositionsTrend(
     },
   };
 
-  return queryTable(DATASETS.TYONV, TABLES.OPEN_POSITIONS_REGION, query);
+  return queryTable(DATASETS.ATP, TABLES.OPEN_POSITIONS_QUARTERLY, query);
 }
 
 // Industry codes (main sectors)
