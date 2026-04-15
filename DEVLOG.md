@@ -9,8 +9,9 @@ This file tracks completed work and planned features. Share this at the start of
 ## General Project State
 
 Dashboard displays Finnish labour market data across four main sections:
-- **Dashboard tab** (Työvoimatutkimus): monthly employment/unemployment with gender & age filters
-- **Trends tab**: quarterly regional multi-line charts for employment/unemployment rates + quarterly national open job vacancies
+- **Avainluvut tab**: key stat cards, trend charts, and quarterly open job vacancies (ATP survey) with metric slicer and chart/table toggle
+- **Työvoimatutkimus tab**: monthly employment/unemployment charts with gender & age filters + regional quarterly trends
+- **Työnvälitystilasto tab**: regional unemployment bar chart by maakunta
 - **Industry tab**: employment by sector and occupation breakdown
 - **Sandbox (Hiekkalaatikko)**: user-defined custom queries against StatFin PxWeb API
 
