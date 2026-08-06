@@ -83,7 +83,7 @@ export function EmploymentChart({
 
         return { period: current.period, yoyValue };
       });
-  }, [data, yoyConfig]);
+  }, [data, yoyConfig, yoyPeriodsBack]);
 
   // Calculate YoY data for multi-line mode
   const multiYoyData = useMemo(() => {
@@ -113,7 +113,7 @@ export function EmploymentChart({
 
         return result;
       });
-  }, [data, yoyConfigs]);
+  }, [data, yoyConfigs, yoyPeriodsBack]);
 
   // Determine display data and configuration based on mode
   const displayData = isYoYMode
