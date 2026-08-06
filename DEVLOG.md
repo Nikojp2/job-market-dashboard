@@ -57,6 +57,10 @@ Data sources:
     written against the old scheme and would otherwise still 400
   - Verified all four tabs (Avainluvut, Työvoimatutkimus, Työnvälitystilasto, Hiekkalaatikko) load real data
     in the dev server; `tsc --noEmit` and `eslint src` both clean
+- Fix React Compiler memoization warning in EmploymentChart.tsx
+  - `yoyPeriodsBack` (added 2026-04-15) was used inside the two YoY `useMemo` callbacks but missing from
+    their dependency arrays, so React Compiler skipped optimizing the component
+  - Added `yoyPeriodsBack` to both dependency arrays
 
 ### 2026-04-15
 - Add table view toggle to avoimet työpaikat section
