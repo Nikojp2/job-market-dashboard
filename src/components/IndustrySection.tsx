@@ -53,9 +53,9 @@ export function IndustrySection() {
         const industryResponse = await getIndustryEmployment();
         const industryParsed = parseJsonStat(industryResponse);
 
-        const years = industryParsed.dimensions['Vuosi'] || [];
-        const industries = industryParsed.dimensions['Toimiala'] || [];
-        const dataKeys = industryParsed.dimensions['Tiedot'] || [];
+        const years = industryParsed.dimensions['timeperiod_y'] || [];
+        const industries = industryParsed.dimensions['toimiala_79_20180101'] || [];
+        const dataKeys = industryParsed.dimensions['contentscode'] || [];
 
         const latestYearIndex = years.length - 1;
         const previousYearIndex = years.length - 2;
@@ -92,7 +92,7 @@ export function IndustrySection() {
         const occupationParsed = parseJsonStat(occupationResponse);
 
         const occupations = occupationParsed.dimensions['Ammattiryhmä'] || [];
-        const occDataKeys = occupationParsed.dimensions['Tiedot'] || [];
+        const occDataKeys = occupationParsed.dimensions['contentscode'] || [];
 
         const transformedOccupation: OccupationDataPoint[] = occupations
           .slice(0, 20) // Take first 20 occupation groups

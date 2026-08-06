@@ -15,29 +15,31 @@ export const DATASETS = {
 } as const;
 
 // Commonly used tables
+// Note: Statistics Finland dropped the "statfin_<dataset>_pxt_" prefix from
+// table IDs (and renamed several variable codes) some time after 2026-02-05.
 export const TABLES = {
   // Labour force by status, gender, age (monthly)
-  LABOUR_FORCE_MONTHLY: 'statfin_tyti_pxt_135y.px',
+  LABOUR_FORCE_MONTHLY: '135y.px',
   // Key indicators with trends and seasonal adjustment
-  KEY_INDICATORS_TREND: 'statfin_tyti_pxt_135z.px',
+  KEY_INDICATORS_TREND: '135z.px',
   // Population by labour market status
-  LABOUR_MARKET_STATUS: 'statfin_tyti_pxt_13aj.px',
+  LABOUR_MARKET_STATUS: '13aj.px',
   // Unemployed job seekers
-  UNEMPLOYED_SEEKERS: 'statfin_tyonv_pxt_12r5.px',
+  UNEMPLOYED_SEEKERS: '12r5.px',
   // Unemployment rate
-  UNEMPLOYMENT_RATE: 'statfin_tyonv_pxt_12tf.px',
+  UNEMPLOYMENT_RATE: '12tf.px',
   // Regional quarterly data by maakunta
-  REGIONAL_QUARTERLY: 'statfin_tyti_pxt_13lx.px',
+  REGIONAL_QUARTERLY: '13lx.px',
   // Employment by industry (annual)
-  INDUSTRY_EMPLOYMENT: 'statfin_tyti_pxt_13aq.px',
+  INDUSTRY_EMPLOYMENT: '13aq.px',
   // Employment by industry (quarterly)
-  INDUSTRY_QUARTERLY: 'statfin_tyti_pxt_137l.px',
+  INDUSTRY_QUARTERLY: '137l.px',
   // Open positions by region (monthly, employment service registry — legacy)
-  OPEN_POSITIONS_REGION: 'statfin_tyonv_pxt_12tv.px',
+  OPEN_POSITIONS_REGION: '12tv.px',
   // Open positions quarterly survey (national total, accurate source)
-  OPEN_POSITIONS_QUARTERLY: 'statfin_atp_pxt_11l1.px',
+  OPEN_POSITIONS_QUARTERLY: '11l1.px',
   // Unemployed and positions by occupation
-  OCCUPATION_DATA: 'statfin_tyonv_pxt_12ti.px',
+  OCCUPATION_DATA: '12ti.px',
 } as const;
 
 // Filter options
@@ -136,36 +138,36 @@ export async function getMonthlyLabourForceData(
   const query: PxWebRequest = {
     query: [
       {
-        code: 'Kuukausi',
+        code: 'timeperiod_m',
         selection: {
           filter: 'all',
           values: ['*'],
         },
       },
       {
-        code: 'Sukupuoli',
+        code: 'sukupuoli_9_20180101',
         selection: {
           filter: 'item',
           values: [gender],
         },
       },
       {
-        code: 'Ikäluokka',
+        code: 'ikaryhma_19_20190101',
         selection: {
           filter: 'item',
           values: [ageGroup],
         },
       },
       {
-        code: 'Tiedot',
+        code: 'contentscode',
         selection: {
           filter: 'item',
           values: [
-            'Tyovoima',        // Labour force
-            'Tyolliset',       // Employed
-            'Tyottomat',       // Unemployed
-            'Tyottomyysaste',  // Unemployment rate
-            'Tyollisyysaste',  // Employment rate
+            'tyti-Tyovoima',        // Labour force
+            'tyti-Tyolliset',       // Employed
+            'tyti-Tyottomat',       // Unemployed
+            'tyti-Tyottomyysaste',  // Unemployment rate
+            'tyti-Tyollisyysaste',  // Employment rate
           ],
         },
       },
@@ -186,22 +188,22 @@ export async function getKeyIndicatorsWithTrend(): Promise<JsonStatResponse> {
   const query: PxWebRequest = {
     query: [
       {
-        code: 'Kuukausi',
+        code: 'timeperiod_m',
         selection: {
           filter: 'all',
           values: ['*'],
         },
       },
       {
-        code: 'Tiedot',
+        code: 'contentscode',
         selection: {
           filter: 'item',
           values: [
-            'Tyolliset',              // Employed (original)
+            'tyti-Tyolliset',         // Employed (original)
             'tyolliset_trendi',       // Employed (trend)
-            'Tyottomat',              // Unemployed (original)
+            'tyti-Tyottomat',         // Unemployed (original)
             'tyottomat_trendi',       // Unemployed (trend)
-            'Tyottomyysaste',         // Unemployment rate (original)
+            'tyti-Tyottomyysaste',    // Unemployment rate (original)
             'tyottaste_trendi',       // Unemployment rate (trend)
             'Tyollisyysaste_15_64',   // Employment rate 15-64 (original)
             'tyollaste_15_64_trendi', // Employment rate 15-64 (trend)
@@ -261,11 +263,11 @@ export async function getJobSeekersByRegion(
         },
       },
       {
-        code: 'Kuukausi',
+        code: 'timeperiod_m',
         selection: monthSelection,
       },
       {
-        code: 'Tiedot',
+        code: 'contentscode',
         selection: {
           filter: 'item',
           values: [
@@ -299,27 +301,27 @@ export async function getRegionalQuarterlyData(
   const query: PxWebRequest = {
     query: [
       {
-        code: 'Vuosineljännes',
+        code: 'timeperiod_q',
         selection: {
           filter: 'all',
           values: ['*'],
         },
       },
       {
-        code: 'Maakunta',
+        code: 'alue_23_20180101',
         selection: {
           filter: 'item',
           values: [region],
         },
       },
       {
-        code: 'Tiedot',
+        code: 'contentscode',
         selection: {
           filter: 'item',
           values: [
-            'Tyolliset',           // Employed
-            'Tyovoima',            // Labour force
-            'Tyottomyysaste',      // Unemployment rate
+            'tyti-Tyolliset',       // Employed
+            'tyti-Tyovoima',        // Labour force
+            'tyti-Tyottomyysaste',  // Unemployment rate
             'Tyollisyysaste_15_64', // Employment rate
           ],
         },
@@ -342,27 +344,27 @@ export async function getMultiRegionQuarterlyData(
   const query: PxWebRequest = {
     query: [
       {
-        code: 'Vuosineljännes',
+        code: 'timeperiod_q',
         selection: {
           filter: 'all',
           values: ['*'],
         },
       },
       {
-        code: 'Maakunta',
+        code: 'alue_23_20180101',
         selection: {
           filter: 'item',
           values: regions,
         },
       },
       {
-        code: 'Tiedot',
+        code: 'contentscode',
         selection: {
           filter: 'item',
           values: [
-            'Tyolliset',           // Employed
-            'Tyovoima',            // Labour force
-            'Tyottomyysaste',      // Unemployment rate
+            'tyti-Tyolliset',       // Employed
+            'tyti-Tyovoima',        // Labour force
+            'tyti-Tyottomyysaste',  // Unemployment rate
             'Tyollisyysaste_15_64', // Employment rate
           ],
         },
@@ -389,22 +391,22 @@ export type AtpMetricValue = typeof ATP_METRIC_OPTIONS[number]['value'];
 
 /**
  * Fetch quarterly open job vacancies from the proper ATP survey (all metrics).
- * Source: Avoimet työpaikat -tutkimus (statfin_atp_pxt_11l1.px)
+ * Source: Avoimet työpaikat -tutkimus (11l1.px)
  * Covers all open positions in the economy (not just TE-office registered ones).
- * Time dimension: Vuosineljännes (quarterly), national total only.
+ * Time dimension: timeperiod_q (quarterly), national total only.
  */
 export async function getOpenPositionsQuarterly(): Promise<JsonStatResponse> {
   const query: PxWebRequest = {
     query: [
       {
-        code: 'Vuosineljännes',
+        code: 'timeperiod_q',
         selection: {
           filter: 'all',
           values: ['*'],
         },
       },
       {
-        code: 'Tiedot',
+        code: 'contentscode',
         selection: {
           filter: 'item',
           values: ATP_METRIC_OPTIONS.map((m) => m.value),
@@ -446,24 +448,24 @@ export async function getIndustryEmployment(): Promise<JsonStatResponse> {
   const query: PxWebRequest = {
     query: [
       {
-        code: 'Vuosi',
+        code: 'timeperiod_y',
         selection: {
           filter: 'all',
           values: ['*'],
         },
       },
       {
-        code: 'Toimiala',
+        code: 'toimiala_79_20180101',
         selection: {
           filter: 'item',
           values: INDUSTRIES.map((i) => i.value),
         },
       },
       {
-        code: 'Tiedot',
+        code: 'contentscode',
         selection: {
           filter: 'item',
-          values: ['Tyolliset', 'tyotunnit'],
+          values: ['tyti-Tyolliset', 'tyotunnit'],
         },
       },
     ],
@@ -491,14 +493,14 @@ export async function getOpenPositionsTrend(
         },
       },
       {
-        code: 'Kuukausi',
+        code: 'timeperiod_m',
         selection: {
           filter: 'all',
           values: ['*'],
         },
       },
       {
-        code: 'Tiedot',
+        code: 'contentscode',
         selection: {
           filter: 'item',
           values: ['AVPAIKATLOPUSSA'],
@@ -520,7 +522,7 @@ export async function getOccupationData(): Promise<JsonStatResponse> {
   const query: PxWebRequest = {
     query: [
       {
-        code: 'Kuukausi',
+        code: 'timeperiod_m',
         selection: {
           filter: 'top',
           values: ['1'],
@@ -534,7 +536,7 @@ export async function getOccupationData(): Promise<JsonStatResponse> {
         },
       },
       {
-        code: 'Tiedot',
+        code: 'contentscode',
         selection: {
           filter: 'item',
           values: ['TYOTTOMATLOPUSSA', 'AVPAIKATLOPUSSA'],
@@ -555,17 +557,17 @@ export async function getOccupationData(): Promise<JsonStatResponse> {
 
 // Metric options for each table
 export const METRIC_OPTIONS_135Y = [
-  { value: 'Tyovoima', label: 'Työvoima' },
-  { value: 'Tyolliset', label: 'Työlliset' },
-  { value: 'Tyottomat', label: 'Työttömät' },
-  { value: 'Tyottomyysaste', label: 'Työttömyysaste (%)' },
-  { value: 'Tyollisyysaste', label: 'Työllisyysaste (%)' },
+  { value: 'tyti-Tyovoima', label: 'Työvoima' },
+  { value: 'tyti-Tyolliset', label: 'Työlliset' },
+  { value: 'tyti-Tyottomat', label: 'Työttömät' },
+  { value: 'tyti-Tyottomyysaste', label: 'Työttömyysaste (%)' },
+  { value: 'tyti-Tyollisyysaste', label: 'Työllisyysaste (%)' },
 ] as const;
 
 export const METRIC_OPTIONS_13LX = [
-  { value: 'Tyolliset', label: 'Työlliset' },
-  { value: 'Tyovoima', label: 'Työvoima' },
-  { value: 'Tyottomyysaste', label: 'Työttömyysaste (%)' },
+  { value: 'tyti-Tyolliset', label: 'Työlliset' },
+  { value: 'tyti-Tyovoima', label: 'Työvoima' },
+  { value: 'tyti-Tyottomyysaste', label: 'Työttömyysaste (%)' },
   { value: 'Tyollisyysaste_15_64', label: 'Työllisyysaste (%)' },
 ] as const;
 
@@ -600,12 +602,12 @@ export const SANDBOX_TABLES: Record<string, { label: string; tables: SandboxTabl
         label: 'Kuukausittainen työvoima',
         description: 'Työvoima, työlliset ja työttömät kuukausittain',
         dataset: DATASETS.TYTI,
-        timeDimension: 'Kuukausi',
+        timeDimension: 'timeperiod_m',
         dimensions: [
-          { code: 'Kuukausi', label: 'Aikajakso', type: 'time' },
-          { code: 'Sukupuoli', label: 'Sukupuoli', type: 'single', options: GENDER_OPTIONS },
-          { code: 'Ikäluokka', label: 'Ikäryhmä', type: 'single', options: AGE_GROUP_OPTIONS },
-          { code: 'Tiedot', label: 'Mittarit', type: 'multi', options: METRIC_OPTIONS_135Y },
+          { code: 'timeperiod_m', label: 'Aikajakso', type: 'time' },
+          { code: 'sukupuoli_9_20180101', label: 'Sukupuoli', type: 'single', options: GENDER_OPTIONS },
+          { code: 'ikaryhma_19_20190101', label: 'Ikäryhmä', type: 'single', options: AGE_GROUP_OPTIONS },
+          { code: 'contentscode', label: 'Mittarit', type: 'multi', options: METRIC_OPTIONS_135Y },
         ],
       },
       {
@@ -613,11 +615,11 @@ export const SANDBOX_TABLES: Record<string, { label: string; tables: SandboxTabl
         label: 'Alueellinen neljännesvuositieto',
         description: 'Työmarkkinatiedot maakunnittain neljännesvuosittain',
         dataset: DATASETS.TYTI,
-        timeDimension: 'Vuosineljännes',
+        timeDimension: 'timeperiod_q',
         dimensions: [
-          { code: 'Vuosineljännes', label: 'Aikajakso', type: 'time' },
-          { code: 'Maakunta', label: 'Maakunta', type: 'multi', options: REGION_OPTIONS },
-          { code: 'Tiedot', label: 'Mittarit', type: 'multi', options: METRIC_OPTIONS_13LX },
+          { code: 'timeperiod_q', label: 'Aikajakso', type: 'time' },
+          { code: 'alue_23_20180101', label: 'Maakunta', type: 'multi', options: REGION_OPTIONS },
+          { code: 'contentscode', label: 'Mittarit', type: 'multi', options: METRIC_OPTIONS_13LX },
         ],
       },
     ],
@@ -630,11 +632,11 @@ export const SANDBOX_TABLES: Record<string, { label: string; tables: SandboxTabl
         label: 'Työttömät työnhakijat alueittain',
         description: 'Työttömät ja avoimet paikat maakunnittain kuukausittain',
         dataset: DATASETS.TYONV,
-        timeDimension: 'Kuukausi',
+        timeDimension: 'timeperiod_m',
         dimensions: [
-          { code: 'Kuukausi', label: 'Aikajakso', type: 'time' },
+          { code: 'timeperiod_m', label: 'Aikajakso', type: 'time' },
           { code: 'Alue', label: 'Alue', type: 'multi', options: REGION_OPTIONS },
-          { code: 'Tiedot', label: 'Mittarit', type: 'multi', options: METRIC_OPTIONS_12R5 },
+          { code: 'contentscode', label: 'Mittarit', type: 'multi', options: METRIC_OPTIONS_12R5 },
         ],
       },
     ],
@@ -653,7 +655,7 @@ export async function querySandbox(
     query: tableConfig.dimensions.map((dim) => {
       if (dim.type === 'time') {
         // For time dimensions, get last N years worth of data
-        const count = dim.code === 'Vuosineljännes' ? yearRange * 4 : yearRange * 12;
+        const count = dim.code === 'timeperiod_q' ? yearRange * 4 : yearRange * 12;
         return {
           code: dim.code,
           selection: {

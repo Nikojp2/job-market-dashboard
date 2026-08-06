@@ -272,9 +272,9 @@ export function TrendsSection() {
         const quarterlyResponse = await getMultiRegionQuarterlyData(selectedRegions);
         const quarterlyParsed = parseJsonStat(quarterlyResponse);
 
-        const quarters = quarterlyParsed.dimensions['Vuosineljännes'] || [];
-        const regions = quarterlyParsed.dimensions['Maakunta'] || [];
-        const dataKeys = quarterlyParsed.dimensions['Tiedot'] || [];
+        const quarters = quarterlyParsed.dimensions['timeperiod_q'] || [];
+        const regions = quarterlyParsed.dimensions['alue_23_20180101'] || [];
+        const dataKeys = quarterlyParsed.dimensions['contentscode'] || [];
 
         // Create a map to store data by period
         const periodMap = new Map<string, MultiRegionTrendData>();
@@ -294,9 +294,9 @@ export function TrendsSection() {
               const value = quarterlyParsed.values[valueIndex] || 0;
 
               // Create unique keys per region
-              if (key === 'Tyolliset') dataPoint[`employed_${regionCode}`] = value;
-              if (key === 'Tyovoima') dataPoint[`labourForce_${regionCode}`] = value;
-              if (key === 'Tyottomyysaste') dataPoint[`unemploymentRate_${regionCode}`] = value;
+              if (key === 'tyti-Tyolliset') dataPoint[`employed_${regionCode}`] = value;
+              if (key === 'tyti-Tyovoima') dataPoint[`labourForce_${regionCode}`] = value;
+              if (key === 'tyti-Tyottomyysaste') dataPoint[`unemploymentRate_${regionCode}`] = value;
               if (key === 'Tyollisyysaste_15_64') dataPoint[`employmentRate_${regionCode}`] = value;
             });
           });
@@ -304,7 +304,6 @@ export function TrendsSection() {
 
         const transformedTrend = Array.from(periodMap.values()).slice(-20); // Last 20 quarters
         setTrendData(transformedTrend);
-
       } catch (err) {
         console.error('Failed to fetch trends data:', err);
       } finally {

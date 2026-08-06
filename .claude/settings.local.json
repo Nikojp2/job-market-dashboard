@@ -2,7 +2,29 @@
   "permissions": {
     "allow": [
       "Bash(npm install:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:pxdata.stat.fi)",
+      "WebSearch",
+      "WebFetch(domain:cartographyvectors.com)",
+      "WebFetch(domain:simplemaps.com)",
+      "WebFetch(domain:commons.wikimedia.org)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nFix TypeScript build errors\n\n- Remove unused imports from RegionalChart\n- Fix Tooltip formatter type in MiniChart\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "Bash(gh api:*)",
+      "Bash(git commit:*)",
+      "Bash(npm run lint)",
+      "Bash(timeout:*)",
+      "Bash(ping:*)",
+      "Bash(npm run dev:*)",
+      "Bash(curl:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(gh repo view:*)",
+      "WebFetch(domain:job-market-dashboard-delta.vercel.app)",
+      "Bash(npx eslint *)",
+      "Bash(git fetch *)",
+      "Bash(git stash *)"
     ]
   }
 }

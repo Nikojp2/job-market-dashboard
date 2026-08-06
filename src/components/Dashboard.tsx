@@ -70,8 +70,8 @@ export function Dashboard() {
         const parsed = parseJsonStat(response);
 
         // Transform data for chart
-        const periods = parsed.dimensions['Kuukausi'] || [];
-        const dataKeys = parsed.dimensions['Tiedot'] || [];
+        const periods = parsed.dimensions['timeperiod_m'] || [];
+        const dataKeys = parsed.dimensions['contentscode'] || [];
 
         const transformed: ChartData[] = periods.map((period, periodIndex) => {
           const dataPoint: ChartData = {
@@ -86,10 +86,10 @@ export function Dashboard() {
             const valueIndex = periodIndex * dataKeys.length + keyIndex;
             const value = parsed.values[valueIndex] || 0;
 
-            if (key === 'Tyolliset') dataPoint.employed = value;
-            if (key === 'Tyottomat') dataPoint.unemployed = value;
-            if (key === 'Tyottomyysaste') dataPoint.unemploymentRate = value;
-            if (key === 'Tyollisyysaste') dataPoint.employmentRate = value;
+            if (key === 'tyti-Tyolliset') dataPoint.employed = value;
+            if (key === 'tyti-Tyottomat') dataPoint.unemployed = value;
+            if (key === 'tyti-Tyottomyysaste') dataPoint.unemploymentRate = value;
+            if (key === 'tyti-Tyollisyysaste') dataPoint.employmentRate = value;
           });
 
           return dataPoint;
@@ -118,8 +118,8 @@ export function Dashboard() {
         const response = await getKeyIndicatorsWithTrend();
         const parsed = parseJsonStat(response);
 
-        const periods = parsed.dimensions['Kuukausi'] || [];
-        const dataKeys = parsed.dimensions['Tiedot'] || [];
+        const periods = parsed.dimensions['timeperiod_m'] || [];
+        const dataKeys = parsed.dimensions['contentscode'] || [];
 
         const transformed: TrendData[] = periods.map((period, periodIndex) => {
           const dataPoint: TrendData = {
@@ -138,11 +138,11 @@ export function Dashboard() {
             const valueIndex = periodIndex * dataKeys.length + keyIndex;
             const value = parsed.values[valueIndex] || 0;
 
-            if (key === 'Tyolliset') dataPoint.employed = value;
+            if (key === 'tyti-Tyolliset') dataPoint.employed = value;
             if (key === 'tyolliset_trendi') dataPoint.employedTrend = value;
-            if (key === 'Tyottomat') dataPoint.unemployed = value;
+            if (key === 'tyti-Tyottomat') dataPoint.unemployed = value;
             if (key === 'tyottomat_trendi') dataPoint.unemployedTrend = value;
-            if (key === 'Tyottomyysaste') dataPoint.unemploymentRate = value;
+            if (key === 'tyti-Tyottomyysaste') dataPoint.unemploymentRate = value;
             if (key === 'tyottaste_trendi') dataPoint.unemploymentRateTrend = value;
             if (key === 'Tyollisyysaste_15_64') dataPoint.employmentRate = value;
             if (key === 'tyollaste_15_64_trendi') dataPoint.employmentRateTrend = value;
@@ -168,7 +168,7 @@ export function Dashboard() {
         const parsed = parseJsonStat(response);
 
         const regions = parsed.dimensions['Alue'] || [];
-        const dataKeys = parsed.dimensions['Tiedot'] || [];
+        const dataKeys = parsed.dimensions['contentscode'] || [];
 
         const transformed: RegionalData[] = regions.map((regionCode, regionIndex) => {
           const regionInfo = REGIONS.find((r) => r.value === regionCode);
@@ -203,10 +203,10 @@ export function Dashboard() {
         const response = await getOpenPositionsQuarterly();
         const parsed = parseJsonStat(response);
 
-        const quarters = parsed.dimensions['Vuosineljännes'] || [];
-        const metrics = parsed.dimensions['Tiedot'] || [];
+        const quarters = parsed.dimensions['timeperiod_q'] || [];
+        const metrics = parsed.dimensions['contentscode'] || [];
 
-        // ATP table returns dimensions in order [Tiedot, Vuosineljännes] (Tiedot is outer/slowest).
+        // ATP table returns dimensions in order [contentscode, timeperiod_q] (contentscode is outer/slowest).
         // Correct index: mIdx * quarters.length + qIdx
         const transformed = quarters.map((period, qIdx) => {
           const dataPoint: { period: string; [key: string]: string | number } = { period };

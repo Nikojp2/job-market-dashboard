@@ -74,7 +74,7 @@ const TIME_PERIOD_OPTIONS: Record<TimeUnit, { value: number; label: string }[]> 
 
 // Helper to detect time variables
 const isTimeVariable = (code: string): boolean => {
-  const timeCodes = ['Kuukausi', 'Vuosineljännes', 'Vuosi', 'Aika', 'Viikko'];
+  const timeCodes = ['Kuukausi', 'Vuosineljännes', 'Vuosi', 'Aika', 'Viikko', 'timeperiod'];
   return timeCodes.some((t) => code.toLowerCase().includes(t.toLowerCase()));
 };
 

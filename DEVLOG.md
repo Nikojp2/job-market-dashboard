@@ -4,7 +4,24 @@ This file tracks completed work and planned features. Share this at the start of
 
 ## Roadmap / Next Up
 
-(No pending items)
+### Eurostat-integraatio – Suomen työllisyysdata EU-vertailukontekstissa
+Lisätään Eurostatin avoimen REST-rajapinnan tuki rinnakkaiseksi datalähteeksi Tilastokeskuksen API:n oheen.
+
+**Miksi mahdollinen:**
+- Eurostat tarjoaa ilmaisen, julkisen REST API:n ilman autentikointia
+- Vastausformaatti on JSON-stat – sama kuin projekti jo käyttää Tilastokeskuksen datan kanssa (`parseJsonStat()` toimii suoraan)
+- Vite-proxy ja Vercel API-reitti voidaan laajentaa helposti uudelle endpointille (sama kaava kuin nykyinen `/api/statfin/*`)
+
+**Relevantit datasetit:**
+- `une_rt_m` – Kuukausittainen työttömyysaste sukupuolen ja iän mukaan (sisältää Suomi-suodattimen `geo=FI`)
+- `lfsi_emp_m` – Kuukausittainen työllisyysaste
+- Base URL: `https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/{datasetCode}`
+
+**Ehdotettu toteutus:**
+1. Lisää `/api/eurostat/*` proxy Vite-configiin ja Vercel-reitteihin
+2. Luo `src/api/eurostat.ts` API-funktioilla (malli: `statfin.ts`)
+3. Lisää uusi välilehti tai osio Dashboardiin EU-vertailunäkymällä
+4. Näytä Suomen luvut rinnakkain EU-keskiarvon kanssa
 
 ## General Project State
 
@@ -20,6 +37,26 @@ Data sources:
 - `atp` — Avoimet työpaikat -tutkimus (Job Vacancy Survey, quarterly, national/suuralue)
 
 ## Changelog
+
+### 2026-08-06
+- Fix "Request failed with status code 400" breaking every chart in production/dev
+  - Root cause: Statistics Finland changed the PxWeb API between 2026-04-15 and now —
+    table IDs dropped the `statfin_<dataset>_pxt_` prefix (e.g. `statfin_tyti_pxt_135y.px` → `135y.px`),
+    and several variable codes were renamed (`Kuukausi`→`timeperiod_m`, `Vuosineljännes`→`timeperiod_q`,
+    `Vuosi`→`timeperiod_y`, `Sukupuoli`→`sukupuoli_9_20180101`, `Ikäluokka`→`ikaryhma_19_20190101`,
+    `Maakunta`→`alue_23_20180101`, `Toimiala`→`toimiala_79_20180101`, `Tiedot`→`contentscode`).
+    `tyti` dataset content values also gained a `tyti-` prefix (e.g. `Tyolliset`→`tyti-Tyolliset`);
+    `tyonv` dataset content codes and `Alue`/`Ammattiryhmä` codes were unaffected.
+  - Updated `TABLES` and every query builder in [statfin.ts](src/api/statfin.ts) to the new IDs/codes
+    (verified live against `pxdata.stat.fi` metadata for each table actually in use)
+  - Updated `parsed.dimensions[...]` lookups in Dashboard.tsx, TrendsSection.tsx, IndustrySection.tsx to match
+  - Fixed Hiekkalaatikko (Sandbox)'s dynamic time-variable detection — `isTimeVariable()` matched on
+    substrings like "kuukausi"/"vuosi", which no longer match the new `timeperiod_*` codes; added `timeperiod`
+    as a detection pattern
+  - Also updated the ATP (avoimet työpaikat) query added on 2026-04-15 to the new table ID/codes — it was
+    written against the old scheme and would otherwise still 400
+  - Verified all four tabs (Avainluvut, Työvoimatutkimus, Työnvälitystilasto, Hiekkalaatikko) load real data
+    in the dev server; `tsc --noEmit` and `eslint src` both clean
 
 ### 2026-04-15
 - Add table view toggle to avoimet työpaikat section
